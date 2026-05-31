@@ -1,4 +1,6 @@
 #include "bench.h"
+#include "spsc_queue.h"
+#include <atomic>
 #include <cstdio>
 #include <thread>
 #include <chrono>
@@ -61,6 +63,122 @@ int main() {
             std::this_thread::sleep_for(std::chrono::nanoseconds(1));
         });
     bench::print_result(result_sleep);
+
+    // --- Benchmark 4: SPSC single-thread roundtrip ---
+    //
+    // Push one uint64_t then immediately pop it — same thread. This is the
+    // absolute floor for SPSC cost: no cross-core coherence traffic, no
+    // scheduling jitter. On x86, acquire/release compile to plain MOVs, so
+    // you're measuring two atomic loads, two atomic stores, and a cache-line
+    // read/write to the slot array.
+    //
+    // Expected: roughly 5–20 ns on a 3 GHz machine. If it reads higher, check
+    // whether the queue spans multiple cache lines (head_/tail_ false sharing).
+    {
+        foundation::SpscQueue<uint64_t, 4096> q;
+        uint64_t sink = 0;
+        auto result = bench::run_bench("spsc roundtrip (1 thread)", 500'000, 10'000,
+            [&]() {
+                q.push(1);
+                q.pop(sink);
+                do_not_optimize(sink);
+            });
+        bench::print_result(result);
+    }
+
+    // --- Benchmark 5: SPSC producer-consumer throughput (2 threads) ---
+    //
+    // Producer spins on push, consumer spins on pop. Measures steady-state
+    // throughput: items transferred per nanosecond when both threads are hot.
+    //
+    // This is the inter-core case. The slot data and the tail_ index travel
+    // across the coherence fabric between producer core and consumer core.
+    // Expected: 100–500 ns/item depending on LLC latency and core topology.
+    // A large gap vs. the single-thread roundtrip above is normal — it reflects
+    // the cost of cache-line ownership transfer between cores (MESI state
+    // transitions from Modified on producer to Exclusive/Shared on consumer).
+    {
+        constexpr std::size_t kItems = 2'000'000;
+        foundation::SpscQueue<uint64_t, 4096> q;
+        std::atomic<bool> go{false};
+
+        std::thread producer([&]() {
+            while (!go.load(std::memory_order_acquire)) {}
+            for (uint64_t i = 0; i < kItems; ++i) {
+                while (!q.push(i)) {}
+            }
+        });
+
+        std::thread consumer([&]() {
+            while (!go.load(std::memory_order_acquire)) {}
+            std::size_t received = 0;
+            while (received < kItems) {
+                uint64_t val;
+                if (q.pop(val)) {
+                    do_not_optimize(val);
+                    ++received;
+                }
+            }
+        });
+
+        auto t0 = std::chrono::steady_clock::now();
+        go.store(true, std::memory_order_release);
+        producer.join();
+        consumer.join();
+        auto t1 = std::chrono::steady_clock::now();
+
+        double total_ns = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+        double ns_per_item = total_ns / static_cast<double>(kItems);
+        double m_items_per_sec = static_cast<double>(kItems) / total_ns * 1000.0;
+        printf("%-30s  %.1f ns/item  (%.0f M items/sec)\n",
+               "spsc throughput (2 threads)", ns_per_item, m_items_per_sec);
+    }
+
+    // --- Benchmark 6: SPSC ping-pong latency (2 threads, 2 queues) ---
+    //
+    // Thread A pushes to q_fwd, Thread B pops from q_fwd and pushes to q_bck,
+    // Thread A pops from q_bck. One round trip = one item traveling A→B→A.
+    // The measured latency is the full cross-core round-trip time for a single
+    // cache line — a proxy for the inter-core communication latency on this
+    // machine. Expect 100–400 ns on modern Intel depending on core placement.
+    {
+        constexpr std::size_t kPings = 200'000;
+        constexpr std::size_t kWarmup = 1'000;
+        foundation::SpscQueue<uint64_t, 2> q_fwd;
+        foundation::SpscQueue<uint64_t, 2> q_bck;
+
+        std::thread relay([&]() {
+            for (std::size_t i = 0; i < kPings + kWarmup; ++i) {
+                uint64_t val;
+                while (!q_fwd.pop(val)) {}
+                while (!q_bck.push(val)) {}
+            }
+        });
+
+        // Warmup
+        for (std::size_t i = 0; i < kWarmup; ++i) {
+            while (!q_fwd.push(0)) {}
+            uint64_t val;
+            while (!q_bck.pop(val)) {}
+        }
+
+        std::vector<double> samples;
+        samples.reserve(kPings);
+        for (std::size_t i = 0; i < kPings; ++i) {
+            uint64_t t0 = bench::tsc_now();
+            while (!q_fwd.push(static_cast<uint64_t>(i))) {}
+            uint64_t val;
+            while (!q_bck.pop(val)) {}
+            uint64_t t1 = bench::tsc_now();
+            samples.push_back(bench::tsc_to_ns(t1 - t0));
+        }
+
+        relay.join();
+
+        auto result = bench::compute_stats("spsc ping-pong RTT (2 threads)", samples);
+        bench::print_result(result);
+    }
 
     return 0;
 }

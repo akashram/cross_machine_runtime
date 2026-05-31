@@ -3,7 +3,10 @@
 Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 
 ## Current status
-Phase 1, step 1 (CMake skeleton) complete. Next: Phase 1 step 2 — TSC-based benchmarking harness in `foundation/`.
+- Phase 1, step 1 (CMake skeleton) — done
+- Phase 1, step 2 (TSC benchmarking harness, `foundation/bench/bench.h`) — done
+- Phase 1, step 3 (SPSC ring buffer, `foundation/spsc_queue.h`) — done. TSan clean. Benchmarks: 11 ns roundtrip (1 thread), 20 ns/item throughput, 43 ns ping-pong RTT (release, 2.3 GHz Mac).
+- Next: Phase 1, step 4 — MPMC ring buffer (`foundation/mpmc_queue.h`)
 
 ## Tooling decisions
 - **Compiler:** Apple clang 14. No pre-built LLVM binaries exist for Intel macOS — brew always builds from source (2-5 hrs). Apple clang handles C++20/23 and all sanitizers fine for Phase 1.
