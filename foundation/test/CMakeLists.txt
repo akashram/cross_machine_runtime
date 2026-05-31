@@ -1,9 +1,11 @@
 add_executable(spsc_queue_test spsc_queue_test.cpp)
-
 target_include_directories(spsc_queue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-
 target_compile_features(spsc_queue_test PRIVATE cxx_std_23)
-
 set_project_warnings(spsc_queue_test)
-
 add_test(NAME spsc_queue_test COMMAND spsc_queue_test)
+
+add_executable(mpmc_queue_test mpmc_queue_test.cpp)
+target_include_directories(mpmc_queue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(mpmc_queue_test PRIVATE cxx_std_23)
+set_project_warnings(mpmc_queue_test)
+add_test(NAME mpmc_queue_test COMMAND mpmc_queue_test)

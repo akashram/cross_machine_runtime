@@ -1,5 +1,6 @@
 #include "bench.h"
 #include "spsc_queue.h"
+#include "mpmc_queue.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -178,6 +179,86 @@ int main() {
 
         auto result = bench::compute_stats("spsc ping-pong RTT (2 threads)", samples);
         bench::print_result(result);
+    }
+
+    printf("\n--- MpmcQueue ---\n\n");
+
+    // --- Benchmark 7: MPMC single-thread roundtrip ---
+    //
+    // Same-thread push+pop. Isolates the per-operation cost of the CAS loop
+    // and sequence number check. On a single thread there is no contention on
+    // tail_/head_, so the CAS always succeeds on the first attempt. The gap
+    // between this and the SPSC roundtrip above is the raw overhead of CAS +
+    // sequence load vs. plain atomic store.
+    {
+        foundation::MpmcQueue<uint64_t, 4096> q;
+        uint64_t sink = 0;
+        auto result = bench::run_bench("mpmc roundtrip (1 thread)", 500'000, 10'000,
+            [&]() {
+                q.push(1);
+                q.pop(sink);
+                do_not_optimize(sink);
+            });
+        bench::print_result(result);
+    }
+
+    // --- Benchmark 8: MPMC 1P-1C throughput ---
+    //
+    // Direct comparison with the SPSC throughput benchmark. Same structure,
+    // same item count. The difference shows MPMC's overhead in the 1P-1C case
+    // where SPSC is theoretically optimal. Typical expectation: MPMC is
+    // 1.5–3x slower than SPSC here due to the CAS on tail_/head_.
+    {
+        auto run_mpmc_throughput = [](const char* label, int n_prod, int n_cons) {
+            constexpr std::size_t kItems = 2'000'000;
+            foundation::MpmcQueue<uint64_t, 4096> q;
+            std::atomic<bool> go{false};
+            std::atomic<uint64_t> push_idx{0};
+            std::atomic<std::size_t> pop_count{0};
+
+            std::vector<std::thread> producers;
+            for (int i = 0; i < n_prod; ++i) {
+                producers.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    for (;;) {
+                        uint64_t val = push_idx.fetch_add(1, std::memory_order_relaxed);
+                        if (val >= kItems) break;
+                        while (!q.push(val)) {}
+                    }
+                });
+            }
+
+            std::vector<std::thread> consumers;
+            for (int i = 0; i < n_cons; ++i) {
+                consumers.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    while (pop_count.load(std::memory_order_relaxed) < kItems) {
+                        uint64_t val;
+                        if (q.pop(val)) {
+                            do_not_optimize(val);
+                            pop_count.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                });
+            }
+
+            auto t0 = std::chrono::steady_clock::now();
+            go.store(true, std::memory_order_release);
+            for (auto& t : producers) t.join();
+            for (auto& t : consumers) t.join();
+            auto t1 = std::chrono::steady_clock::now();
+
+            double total_ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+            double ns_per_item = total_ns / static_cast<double>(kItems);
+            double m_items_per_sec = static_cast<double>(kItems) / total_ns * 1000.0;
+            printf("%-36s  %.1f ns/item  (%.0f M items/sec)\n",
+                   label, ns_per_item, m_items_per_sec);
+        };
+
+        run_mpmc_throughput("mpmc 1P-1C throughput", 1, 1);
+        run_mpmc_throughput("mpmc 2P-2C throughput", 2, 2);
+        run_mpmc_throughput("mpmc 4P-4C throughput", 4, 4);
     }
 
     return 0;
