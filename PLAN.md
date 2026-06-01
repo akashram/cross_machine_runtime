@@ -444,6 +444,58 @@ Agents demonstrably find real optimizations, not toy ones. eBPF traces show kern
 
 ---
 
+## Phase 12: Machine Learning Library
+**Estimated duration: 3–4 months**
+**Position in sequence:** After Phase 6 (distributed training infrastructure exists), before Phase 9 (inference serving). Classical ML uses Phase 1 lock-free primitives + Phase 2 SIMD. Deep learning builds on Phase 3 GPU kernels.
+
+### What to learn first
+- Bias-variance decomposition: the mathematical reason GBT overfits differently than a neural network
+- Second-order optimization: why GBT uses Newton steps (Friedman 2001 — read the paper)
+- PAC learning and generalization bounds: why they matter even when too loose to be practical
+- Information-theoretic view of decision trees: entropy, Gini impurity, and why they differ
+- The kernel trick: how SVMs achieve nonlinearity without explicit feature maps
+- Ensemble theory: why bagging reduces variance but not bias; why boosting reduces both
+
+### Phase 12a: Classical ML
+1. **Decision tree (CART)** — Gini/entropy splitting, pre-pruning (max_depth, min_samples_leaf), post-pruning. Vectorized split search using SIMD.
+2. **Random Forest** — bagging with bootstrap samples, `max_features = sqrt(p)` (classification) / `p/3` (regression), out-of-bag error estimation, feature importance via permutation. Parallelized over trees using work-stealing thread pool.
+3. **Gradient Boosted Trees** — Friedman's algorithm with second-order (Newton) optimization, histogram-based split finding (LightGBM-style), column subsampling, L1/L2 regularization, shrinkage. Benchmarked against LightGBM throughput on large datasets.
+4. **SVM** — SMO algorithm (Platt 1998), RBF/polynomial/linear kernels, kernel caching. Binary + multiclass (one-vs-rest).
+5. **k-NN** — KD-tree (exact) and ball tree (approximate), SIMD distance computation, benchmarked against sklearn.
+6. **k-means++** — improved initialization (Arthur & Vassilvitskii 2007), Lloyd's iteration with SIMD centroid update, elbow method for k selection.
+7. **PCA** — incremental SVD (Halko et al. 2011 randomized algorithm), explained variance ratio, whitening. Benchmarked against sklearn.
+8. **Linear models** — SGD with L1/L2 regularization (elastic net), L-BFGS. Logistic regression as baseline classifier.
+
+### Phase 12b: Decision Framework + Benchmarks
+9. **OpenML CC-18 runner** — automated evaluation harness: load all 18 datasets, train each algorithm, record accuracy + training time + inference latency.
+10. **Cross-method comparison** — for each dataset: which model wins and why. Written analysis per dataset explaining the result in terms of data characteristics (size, dimensionality, categorical features, noise level).
+11. **Decision criteria document** — written guide: given data type/size/constraint, which model family to reach for first and why. Covers: tabular vs. unstructured, small vs. large data, interpretability constraints, latency constraints.
+12. **Hyperparameter sensitivity analysis** — for each algorithm: sweep key hyperparameters, plot accuracy vs. parameter, document the mechanism behind each sensitivity.
+13. **Ensemble composition** — stacking (diverse base models + meta-learner), blending. Empirical validation that diversity is necessary (show correlated models add no value). Written rules for when to ensemble vs. not.
+14. **Failure mode catalog** — for each algorithm: a concrete example where it fails badly and why. GBT on noisy labels, k-NN in high dimensions, SVM at scale, RF on highly imbalanced classes.
+
+### Phase 12c: Hyperparameter Optimization
+15. **Bayesian optimization** — Gaussian Process surrogate, Expected Improvement acquisition function, upper confidence bound. Benchmarked against random search and grid search.
+16. **TPE (Tree-structured Parzen Estimator)** — Optuna-style, models p(x|y<threshold) and p(x|y>=threshold) separately. More scalable than GP-based BO.
+17. **Hyperband / ASHA** — successive halving, early stopping of unpromising configs, async version for parallel workers.
+18. **Population-based training** — exploit/explore schedule, mutation of hyperparameters mid-training. Useful for neural network training.
+
+### Deliverables
+- `/ml/` directory with all classical algorithms
+- OpenML CC-18 benchmark results with analysis
+- Design doc: "When to Use What" — decision criteria per scenario
+- Design doc: "Algorithm Deep Dives" — mathematical foundations + failure modes for each method
+- Ensemble recipe book with empirical validation
+- Hyperparameter sensitivity charts per algorithm
+
+### Definition of done
+GBT matches LightGBM accuracy on OpenML CC-18 and beats it on training throughput for datasets > 1M rows. Decision framework document can correctly predict the winning algorithm for a held-out dataset before running it. Bayesian optimization finds better hyperparameters than random search in fewer evaluations (validated on 3+ datasets).
+
+### Note on what this demonstrates
+This phase demonstrates ML systems depth and empirical judgment. It does NOT replace: reading the original papers (Breiman 2001 RF, Friedman 2001 GBT, Platt 1998 SMO), studying learning theory, or breadth from diverse real-world problem experience. Read the papers alongside the implementations.
+
+---
+
 ## Phase 11: Polish + Portfolio
 **Estimated duration: 1–2 months (ongoing throughout)**
 

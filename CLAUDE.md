@@ -15,6 +15,19 @@ Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 - **Build system:** Ninja. CMake generates Ninja files.
 - **Presets:** debug, release, asan, tsan, ubsan — each builds to its own `build/<preset>/` directory. Run with `cmake --preset <name>` and `cmake --build --preset <name>`.
 
+## Execution plan (agreed 2026-05-31)
+1. Finish Phase 1 fully (steps 5–18) with real implementations and tests.
+2. Scaffold all phases 2–12 with real sample implementations — actual CUDA kernels, Raft, ZeRO, GBDT, etc. Hardware-gated with #ifdef/find_package where toolchain absent. Written as a safety checkpoint; user will walk through code with Claude to understand it.
+3. Work through phases one by one to build real understanding.
+
+## Phase 12: Machine Learning (added 2026-05-31)
+Inserted after Phase 6 (distributed training), before Phase 9 (inference serving). See PLAN.md for full detail.
+- **12a — Classical ML:** Random Forest, GBT (XGBoost/LightGBM-style), SVM, k-NN, k-means++, PCA
+- **12b — Decision Framework + Benchmarks:** cross-method ablation on OpenML CC-18, written decision criteria, ensemble composition rules, hyperparameter sensitivity analysis
+- **12c — Hyperparameter optimization:** Bayesian opt (GP), TPE, Hyperband/ASHA
+- Benchmark targets: beat LightGBM throughput on large tabular while matching accuracy; compete on MLPerf
+- Design docs are first-class: each algorithm family gets decision criteria, math foundations, failure modes
+
 ## Non-negotiable standards (from PLAN.md)
 - Every component is benchmarked before moving on. No "I'll benchmark later."
 - Every data structure has property-based tests verifying linearizability.
