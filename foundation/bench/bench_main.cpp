@@ -3,6 +3,7 @@
 #include "mpmc_queue.h"
 #include "aba/aba_demo.h"
 #include "aba/aba_stack.h"
+#include "hazard/hazard_stack.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -296,6 +297,34 @@ int main() {
             [&]() {
                 stack.push(&node);
                 do_not_optimize(stack.pop());
+            });
+        bench::print_result(result);
+    }
+
+    printf("\n--- HazardStack (hazard pointer reclamation) ---\n\n");
+
+    // --- Benchmark 11: HazardStack single-thread push+pop roundtrip ---
+    //
+    // Each push allocates a Node with new; each pop protects via a hazard
+    // pointer, does a 16-byte CAS, then retires the node. The retire triggers
+    // a scan once the list exceeds threshold (2 * record_count * slots_per_thread).
+    // With 1 thread and 2 slots, threshold = 4. Every 4th pop causes a scan.
+    //
+    // Compare to AbaStack: AbaStack leaks nodes (no retire), so it avoids
+    // both the scan cost and the heap allocation. The gap shows the combined
+    // cost of:
+    //   (1) new + delete (heap round-trip per push+pop)
+    //   (2) retire list management
+    //   (3) amortized hazard pointer scan (1/threshold scans per pop)
+    {
+        foundation::HazardDomain domain;
+        foundation::HazardStack<uint64_t> stack(domain);
+        uint64_t sink = 0;
+        auto result = bench::run_bench("hazard_stack roundtrip (HP + new/del)", 500'000, 10'000,
+            [&]() {
+                stack.push(1ULL);
+                stack.pop(sink);
+                do_not_optimize(sink);
             });
         bench::print_result(result);
     }
