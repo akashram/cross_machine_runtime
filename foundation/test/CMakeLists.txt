@@ -21,3 +21,9 @@ target_include_directories(hazard_ptr_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_compile_features(hazard_ptr_test PRIVATE cxx_std_23)
 set_project_warnings(hazard_ptr_test)
 add_test(NAME hazard_ptr_test COMMAND hazard_ptr_test)
+
+add_executable(epoch_reclaim_test epoch_reclaim_test.cpp)
+target_include_directories(epoch_reclaim_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(epoch_reclaim_test PRIVATE cxx_std_23)
+set_project_warnings(epoch_reclaim_test)
+add_test(NAME epoch_reclaim_test COMMAND epoch_reclaim_test)

@@ -4,6 +4,7 @@
 #include "aba/aba_demo.h"
 #include "aba/aba_stack.h"
 #include "hazard/hazard_stack.h"
+#include "epoch/epoch_stack.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -321,6 +322,32 @@ int main() {
         foundation::HazardStack<uint64_t> stack(domain);
         uint64_t sink = 0;
         auto result = bench::run_bench("hazard_stack roundtrip (HP + new/del)", 500'000, 10'000,
+            [&]() {
+                stack.push(1ULL);
+                stack.pop(sink);
+                do_not_optimize(sink);
+            });
+        bench::print_result(result);
+    }
+
+    printf("\n--- EpochStack (epoch-based reclamation) ---\n\n");
+
+    // --- Benchmark 12: EpochStack single-thread push+pop roundtrip ---
+    //
+    // Compare with HazardStack (bench 11). Key differences:
+    //   - Enter/exit: one seq_cst store each (cheaper than HP's validate loop)
+    //   - No per-node hazard publication; any number of nodes safe in one guard
+    //   - try_advance() on each retire: O(T) scan of thread records
+    //
+    // With T=1 thread the scan is trivial (one record). The dominant costs
+    // are new+delete (same as HazardStack) and the retire mutex + advance.
+    // Expect similar latency to HazardStack; the real EBR win shows at
+    // high concurrency with many nodes accessed per critical section.
+    {
+        foundation::EpochDomain domain;
+        foundation::EpochStack<uint64_t> stack(domain);
+        uint64_t sink = 0;
+        auto result = bench::run_bench("epoch_stack  roundtrip (EBR + new/del)", 500'000, 10'000,
             [&]() {
                 stack.push(1ULL);
                 stack.pop(sink);

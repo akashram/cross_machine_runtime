@@ -55,6 +55,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <mutex>
 #include <vector>
 
 namespace foundation {
@@ -164,16 +165,13 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    // Per-thread state (exposed for scan() and ThreadState destructor)
+    // Per-thread state: only the hazard pointer record.
+    // The retire list is global (inside the domain) so it survives thread exit.
     // -----------------------------------------------------------------------
     struct ThreadState {
-        HazardRecord*           record{nullptr};
-        std::vector<RetiredPtr>  retire_list;
-        HazardDomain*            domain{nullptr};
+        uint64_t      domain_id{0};   // 0 = unregistered
+        HazardRecord* record{nullptr};
 
-        // On thread exit: flush the retire list and release the record.
-        // Items still protected at exit time are leaked. In well-behaved
-        // code (all guards released before thread exit), this frees everything.
         ~ThreadState() noexcept;
     };
 
@@ -183,8 +181,16 @@ private:
     void          set_slot(std::size_t slot, void* p) noexcept;
     HazardRecord* get_or_create_record() noexcept;
 
+    static inline std::atomic<uint64_t> next_id_{1};
+    const uint64_t id_{next_id_.fetch_add(1, std::memory_order_relaxed)};
+
     alignas(64) std::atomic<HazardRecord*> head_{nullptr};
     alignas(64) std::atomic<std::size_t>  record_count_{0};
+
+    // Global retire list. Protected by a mutex — held only during retire/scan,
+    // never during hazard pointer slot operations (which are lock-free).
+    mutable std::mutex       retire_mutex_;
+    std::vector<RetiredPtr>  global_retire_;
 };
 
 // ---------------------------------------------------------------------------
@@ -197,18 +203,18 @@ private:
 // each thread may only use one domain at a time.
 inline HazardDomain::ThreadState& HazardDomain::tl() noexcept {
     thread_local ThreadState s;
-    if (!s.domain) {
-        s.domain = this;
-        s.record = get_or_create_record();
+    if (s.domain_id != id_) {
+        if (s.record)
+            s.record->active.store(false, std::memory_order_release);
+        s.domain_id = id_;
+        s.record    = get_or_create_record();
     }
-    assert(s.domain == this &&
-           "Each thread may use only one HazardDomain instance at a time");
     return s;
 }
 
 inline HazardDomain::ThreadState::~ThreadState() noexcept {
-    if (!domain) return;
-    domain->scan();
+    // Just release the hazard pointer record. The retire list lives in the
+    // domain (global_retire_) so items are not lost when this thread exits.
     if (record)
         record->active.store(false, std::memory_order_release);
 }
@@ -243,24 +249,30 @@ inline void HazardDomain::set_slot(std::size_t slot, void* p) noexcept {
 }
 
 inline void HazardDomain::do_retire(void* ptr, void(*del)(void*) noexcept) noexcept {
-    ThreadState& ts = tl();
-    ts.retire_list.push_back({ptr, del});
+    std::size_t list_size;
+    {
+        std::lock_guard lk(retire_mutex_);
+        global_retire_.push_back({ptr, del});
+        list_size = global_retire_.size();
+    }
     // Threshold: 2 * (number of records) * slots_per_thread.
-    // Guarantees amortized O(1) per retire() call.
     std::size_t n = record_count_.load(std::memory_order_acquire);
     std::size_t threshold = kScanFactor * n * kHazardSlotsPerThread;
     if (threshold == 0) threshold = 1;
-    if (ts.retire_list.size() >= threshold)
+    if (list_size >= threshold)
         scan();
 }
 
 inline void HazardDomain::scan() noexcept {
-    ThreadState& ts = tl();
-    if (ts.retire_list.empty()) return;
+    // Take ownership of the current retire list.
+    std::vector<RetiredPtr> to_process;
+    {
+        std::lock_guard lk(retire_mutex_);
+        if (global_retire_.empty()) return;
+        to_process = std::move(global_retire_);
+    }
 
-    // Collect all published hazard pointers.
-    // seq_cst loads synchronize with the seq_cst stores in set_slot():
-    // any protect() that happened-before this scan is visible here.
+    // Collect all published hazard pointers (seq_cst).
     std::vector<void*> hazards;
     hazards.reserve(record_count_.load(std::memory_order_acquire) *
                     kHazardSlotsPerThread);
@@ -274,21 +286,24 @@ inline void HazardDomain::scan() noexcept {
     }
     std::sort(hazards.begin(), hazards.end());
 
-    // Free everything not protected; keep the rest for next time.
+    // Free unprotected items; return survivors to the global list.
     std::vector<RetiredPtr> survivors;
-    for (auto& rp : ts.retire_list) {
+    for (auto& rp : to_process) {
         if (!std::binary_search(hazards.begin(), hazards.end(), rp.ptr))
             rp.reclaim();
         else
             survivors.push_back(rp);
     }
-    ts.retire_list = std::move(survivors);
+    if (!survivors.empty()) {
+        std::lock_guard lk(retire_mutex_);
+        global_retire_.insert(global_retire_.end(),
+                              survivors.begin(), survivors.end());
+    }
 }
 
 inline std::size_t HazardDomain::pending_count() const noexcept {
-    // const_cast: tl() acquires the thread's record (a one-time setup side effect).
-    // The retire_list itself is read-only from the caller's perspective.
-    return const_cast<HazardDomain*>(this)->tl().retire_list.size();
+    std::lock_guard lk(retire_mutex_);
+    return global_retire_.size();
 }
 
 } // namespace foundation
