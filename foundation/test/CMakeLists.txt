@@ -9,3 +9,9 @@ target_include_directories(mpmc_queue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_compile_features(mpmc_queue_test PRIVATE cxx_std_23)
 set_project_warnings(mpmc_queue_test)
 add_test(NAME mpmc_queue_test COMMAND mpmc_queue_test)
+
+add_executable(aba_test aba_test.cpp)
+target_include_directories(aba_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(aba_test PRIVATE cxx_std_23)
+set_project_warnings(aba_test)
+add_test(NAME aba_test COMMAND aba_test)

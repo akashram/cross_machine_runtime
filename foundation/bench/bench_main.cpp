@@ -1,6 +1,8 @@
 #include "bench.h"
 #include "spsc_queue.h"
 #include "mpmc_queue.h"
+#include "aba/aba_demo.h"
+#include "aba/aba_stack.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -259,6 +261,43 @@ int main() {
         run_mpmc_throughput("mpmc 1P-1C throughput", 1, 1);
         run_mpmc_throughput("mpmc 2P-2C throughput", 2, 2);
         run_mpmc_throughput("mpmc 4P-4C throughput", 4, 4);
+    }
+
+    printf("\n--- ABA tagged-pointer stack ---\n\n");
+
+    // --- Benchmark 9: BuggyStack single-thread roundtrip (8-byte CAS) ---
+    //
+    // push + pop on a single node, same thread, no contention.
+    // Measures the raw cost of the 8-byte compare_exchange_weak on the
+    // head_ pointer. CAS always succeeds on the first try (no contention).
+    // The node is pushed and immediately popped — one write + one CAS each way.
+    {
+        foundation::BuggyStack<uint64_t> stack;
+        foundation::BuggyStack<uint64_t>::Node node{0, nullptr};
+        auto result = bench::run_bench("buggy_stack roundtrip (8B CAS)", 500'000, 10'000,
+            [&]() {
+                stack.push(&node);
+                do_not_optimize(stack.pop());
+            });
+        bench::print_result(result);
+    }
+
+    // --- Benchmark 10: AbaStack single-thread roundtrip (16-byte CAS) ---
+    //
+    // Same structure as above but uses a 16-byte tagged pointer and cmpxchg16b.
+    // The gap between this and the buggy stack roundtrip is the pure cost of
+    // the 128-bit CAS vs 64-bit CAS — no contention, no coherence traffic.
+    // Expected: cmpxchg16b is ~1.5–3x more expensive than cmpxchg on x86-64
+    // because it requires exclusive ownership of a full 16-byte cache line.
+    {
+        foundation::AbaStack<uint64_t> stack;
+        foundation::AbaStack<uint64_t>::Node node{0, nullptr};
+        auto result = bench::run_bench("aba_stack  roundtrip (16B CAS)", 500'000, 10'000,
+            [&]() {
+                stack.push(&node);
+                do_not_optimize(stack.pop());
+            });
+        bench::print_result(result);
     }
 
     return 0;
