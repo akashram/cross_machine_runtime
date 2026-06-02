@@ -27,3 +27,9 @@ target_include_directories(epoch_reclaim_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_compile_features(epoch_reclaim_test PRIVATE cxx_std_23)
 set_project_warnings(epoch_reclaim_test)
 add_test(NAME epoch_reclaim_test COMMAND epoch_reclaim_test)
+
+add_executable(rcu_test rcu_test.cpp)
+target_include_directories(rcu_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(rcu_test PRIVATE cxx_std_23)
+set_project_warnings(rcu_test)
+add_test(NAME rcu_test COMMAND rcu_test)

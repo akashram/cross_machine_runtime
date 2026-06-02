@@ -5,6 +5,7 @@
 #include "aba/aba_stack.h"
 #include "hazard/hazard_stack.h"
 #include "epoch/epoch_stack.h"
+#include "rcu/rcu_ptr.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -354,6 +355,69 @@ int main() {
                 do_not_optimize(sink);
             });
         bench::print_result(result);
+    }
+
+    printf("\n--- RcuPtr (read-copy-update) ---\n\n");
+
+    // --- Benchmark 13: RCU read-side roundtrip (no contention, 1 thread) ---
+    //
+    // ReadGuard::ReadGuard() + rcu_ptr.get() + ReadGuard::~ReadGuard().
+    // This measures the pure reader overhead: two seq_cst fetch_add operations
+    // (read_lock + read_unlock) plus one acquire load for get().
+    //
+    // On x86, seq_cst fetch_add compiles to LOCK XADD — same as acq_rel RMW,
+    // about 10–15 ns each. The acquire load is a plain MOV (~1 ns).
+    // Expected total: 20–35 ns.
+    //
+    // Compare with EpochStack enter+exit:
+    //   enter = acquire load + relaxed store + seq_cst store (~15 ns)
+    //   exit  = release store (~5 ns)
+    // EBR's read-side is slightly cheaper (~20 ns) because it stores a fixed
+    // epoch value rather than doing an atomic RMW. The RCU trade-off is that
+    // readers never touch a shared epoch counter, making RCU more scalable
+    // under extremely high reader concurrency.
+    {
+        foundation::RcuDomain domain;
+        foundation::RcuPtr<uint64_t> ptr(domain, new uint64_t{42});
+
+        auto result = bench::run_bench("rcu read-side  (ReadGuard + get, 1T)", 500'000, 10'000,
+            [&]() {
+                foundation::RcuDomain::ReadGuard guard(domain);
+                do_not_optimize(ptr.get());
+            });
+        bench::print_result(result);
+
+        domain.reclaim_all();
+        // ~RcuPtr deletes the current value
+    }
+
+    // --- Benchmark 14: RCU write roundtrip (store new, retire old, 1 thread) ---
+    //
+    // Each iteration: new uint64_t allocation + ptr_.exchange + domain.retire.
+    // retire() accumulates into a batch; every kRcuReclaimThreshold (64) items
+    // it calls synchronize() + bulk free. The amortized cost per store:
+    //   most iterations: exchange + mutex + push_back          (~30 ns)
+    //   every 64th:      + synchronize() [fence + scan + fence]
+    //
+    // With no active readers, synchronize() scans an empty waitlist and returns
+    // after just the two fences (~5 ns extra). On x86 MFENCE is ~10–15 ns.
+    // Amortized over 64 items: ~(30 + 25/64) ≈ 30 ns/write expected.
+    //
+    // Note: this benchmark forces reclaim_all() at the end to free the last
+    // partial batch. The ~RcuPtr then deletes the final live pointer.
+    {
+        foundation::RcuDomain domain;
+        foundation::RcuPtr<uint64_t> ptr(domain, new uint64_t{0});
+
+        uint64_t counter = 0;
+        auto result = bench::run_bench("rcu write      (store+retire, amortized, 1T)", 50'000, 1'000,
+            [&]() {
+                ptr.store(new uint64_t{++counter});
+            });
+        bench::print_result(result);
+
+        domain.reclaim_all();
+        // ~RcuPtr deletes the final value
     }
 
     return 0;

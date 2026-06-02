@@ -10,7 +10,8 @@ Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 - Phase 1, step 5 (ABA problem, `foundation/aba/`) — done. BuggyStack demo + AbaStack with 16-byte tagged-pointer CAS (cmpxchg16b). 25 ns (8B CAS) vs 39 ns (16B CAS). TSan clean.
 - Phase 1, step 6 (hazard pointers, `foundation/hazard/`) — done. HazardDomain (global retire list, seq_cst slots, domain ID for tl() safety) + HazardStack<T>. 214 ns roundtrip. TSan clean.
 - Phase 1, step 7 (epoch-based reclamation, `foundation/epoch/`) — done. EpochDomain (3-slot epoch cycling, global retire list) + EpochStack<T> (plain CAS — EBR prevents ABA implicitly). 171 ns roundtrip. TSan clean. Design doc in header: when to choose EBR vs hazard pointers.
-- Next: Phase 1, step 8 — RCU (`foundation/rcu/`)
+- Phase 1, step 8 (RCU, `foundation/rcu/`) — done. RcuDomain (per-thread even/odd counter, synchronize() waits for active readers) + RcuPtr<T> (read-mostly atomic pointer). Read side: 31 ns (2× seq_cst fetch_add + acquire load). Write amortized: 58 ns (exchange + retire batch, synchronize() every 64 retires). TSan clean. Design doc in header: when to choose RCU vs EBR.
+- Next: Phase 1, step 9 — lock-free freelist (`foundation/freelist/`)
 
 ## Tooling decisions
 - **Compiler:** Apple clang 14. No pre-built LLVM binaries exist for Intel macOS — brew always builds from source (2-5 hrs). Apple clang handles C++20/23 and all sanitizers fine for Phase 1.
