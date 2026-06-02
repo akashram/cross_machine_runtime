@@ -120,7 +120,7 @@ static void test_grow() {
 
     // Pop all in LIFO order.
     for (int i = kItems - 1; i >= 0; --i) {
-        auto v = dq.pop();
+        [[maybe_unused]] auto v = dq.pop();
         assert(v && *v == i);
     }
     assert(dq.empty());
@@ -180,8 +180,7 @@ static void test_multiple_thieves_no_duplicate() {
             while (!owner_done.load(std::memory_order_acquire) || !dq.empty()) {
                 auto v = dq.steal();
                 if (v) {
-                    int prev = seen[static_cast<std::size_t>(*v)].fetch_add(1, std::memory_order_relaxed);
-                    assert(prev == 0);  // no duplicate steals
+                    assert(seen[static_cast<std::size_t>(*v)].fetch_add(1, std::memory_order_relaxed) == 0);
                 }
             }
         });
@@ -191,7 +190,7 @@ static void test_multiple_thieves_no_duplicate() {
     owner_done.store(true, std::memory_order_release);
     for (auto& t : thieves) t.join();
 
-    int total = 0;
+    [[maybe_unused]] int total = 0;
     for (auto& a : seen) total += a.load();
     assert(total == kItems);
 

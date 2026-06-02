@@ -108,26 +108,27 @@ class ChaseLevDeque {
 
     // Circular buffer with power-of-2 capacity for cheap modulo via bitmasking.
     struct Array {
-        const int64_t cap;   // capacity (power of 2)
-        const int64_t mask;  // cap - 1, for index masking
+        const std::size_t cap;   // capacity (power of 2)
+        const std::size_t mask;  // cap - 1, for index masking
         std::unique_ptr<std::atomic<T>[]> data;
 
-        explicit Array(int64_t c)
-            : cap(c), mask(c - 1), data(new std::atomic<T>[static_cast<std::size_t>(c)]) {
+        explicit Array(std::size_t c)
+            : cap(c), mask(c - 1), data(new std::atomic<T>[c]) {
             assert(c > 0 && (c & (c - 1)) == 0);
         }
 
+        // i is always non-negative at call sites; the cast makes that explicit.
         T load(int64_t i) const noexcept {
-            return data[i & mask].load(std::memory_order_relaxed);
+            return data[static_cast<std::size_t>(i) & mask].load(std::memory_order_relaxed);
         }
         void store(int64_t i, T v) noexcept {
-            data[i & mask].store(v, std::memory_order_relaxed);
+            data[static_cast<std::size_t>(i) & mask].store(v, std::memory_order_relaxed);
         }
     };
 
 public:
     explicit ChaseLevDeque(std::size_t initial_cap = 256)
-        : array_(new Array(static_cast<int64_t>(initial_cap))) {
+        : array_(new Array(initial_cap)) {
         assert(initial_cap > 0 && (initial_cap & (initial_cap - 1)) == 0);
     }
 
@@ -144,7 +145,7 @@ public:
         int64_t t = top_.load(std::memory_order_acquire);
         Array*  a = array_.load(std::memory_order_relaxed);
 
-        if (b - t >= a->cap)
+        if (static_cast<std::size_t>(b - t) >= a->cap)
             a = grow(a, t, b);
 
         a->store(b, val);
