@@ -51,3 +51,9 @@ target_include_directories(chase_lev_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_compile_features(chase_lev_test PRIVATE cxx_std_23)
 set_project_warnings(chase_lev_test)
 add_test(NAME chase_lev_test COMMAND chase_lev_test)
+
+add_executable(ws_pool_test ws_pool_test.cpp)
+target_include_directories(ws_pool_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(ws_pool_test PRIVATE cxx_std_23)
+set_project_warnings(ws_pool_test)
+add_test(NAME ws_pool_test COMMAND ws_pool_test)

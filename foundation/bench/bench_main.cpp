@@ -9,6 +9,7 @@
 #include "freelist/freelist.h"
 #include "msqueue/ms_queue.h"
 #include "chase_lev/chase_lev.h"
+#include "ws_pool/ws_pool.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -711,6 +712,86 @@ int main() {
         run_steal("chase_lev steal throughput 1T", 1);
         run_steal("chase_lev steal throughput 2T", 2);
         run_steal("chase_lev steal throughput 4T", 4);
+    }
+
+    printf("\n--- WorkStealingPool ---\n\n");
+
+    // --- Benchmark 21: parallel_for throughput (task overhead measurement) ---
+    //
+    // N empty tasks, all run in parallel, timed end-to-end.
+    // This measures the per-task scheduling overhead: submit to inbox/deque,
+    // worker wakes, executes, decrements pending_, signals done.
+    // Task body is a single atomic increment — the rest is pool overhead.
+    //
+    // With 4 workers, ideal speedup is 4x. Real speedup is lower due to:
+    //   - Contention on inbox_mu_ for external submissions
+    //   - done_cv_ mutex in execute() when pending_ → 0
+    //   - Cache misses on pending_ (shared atomic, N workers write to it)
+    {
+        auto bench_pfor = [](const char* label, std::size_t n_workers, std::size_t n_tasks) {
+            foundation::WorkStealingPool pool(n_workers);
+            std::atomic<std::size_t> count{0};
+
+            auto t0 = std::chrono::steady_clock::now();
+            pool.parallel_for(n_tasks, [&](std::size_t) {
+                count.fetch_add(1, std::memory_order_relaxed);
+            });
+            auto t1 = std::chrono::steady_clock::now();
+
+            double ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+            printf("%-42s  %.1f ns/task  (%.0f M tasks/sec)\n",
+                   label, ns / static_cast<double>(n_tasks),
+                   static_cast<double>(n_tasks) / ns * 1000.0);
+        };
+
+        bench_pfor("ws_pool parallel_for 1W  10K tasks",  1, 10'000);
+        bench_pfor("ws_pool parallel_for 2W  10K tasks",  2, 10'000);
+        bench_pfor("ws_pool parallel_for 4W  10K tasks",  4, 10'000);
+        bench_pfor("ws_pool parallel_for 4W 100K tasks",  4, 100'000);
+    }
+
+    // --- Benchmark 22: parallel speedup on real work (vector sum) ---
+    //
+    // Sum N integers partitioned into kChunks chunks. Measures actual parallel
+    // speedup relative to sequential: how much of the theoretical 4x is
+    // realised when each task does ~microseconds of real work (not just overhead).
+    // Tasks with more compute amortise the scheduling cost better.
+    {
+        constexpr std::size_t N       = 10'000'000;
+        constexpr std::size_t kChunks = 400;
+        std::vector<int> data(N);
+        std::iota(data.begin(), data.end(), 0);
+        std::vector<long long> partial(kChunks, 0);
+
+        // Sequential baseline
+        auto t0 = std::chrono::steady_clock::now();
+        long long seq_sum = 0;
+        for (std::size_t i = 0; i < N; ++i) seq_sum += data[i];
+        auto t1 = std::chrono::steady_clock::now();
+        double seq_ns = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+        printf("%-42s  %.1f ms  (sum=%lld)\n",
+               "ws_pool vector sum sequential", seq_ns / 1e6, seq_sum);
+
+        // Parallel with 4 workers
+        foundation::WorkStealingPool pool(4);
+        t0 = std::chrono::steady_clock::now();
+        pool.parallel_for(kChunks, [&](std::size_t c) {
+            std::size_t start = c * (N / kChunks);
+            std::size_t end   = start + (N / kChunks);
+            long long s = 0;
+            for (std::size_t i = start; i < end; ++i) s += data[i];
+            partial[c] = s;
+        });
+        long long par_sum = 0;
+        for (auto s : partial) par_sum += s;
+        t1 = std::chrono::steady_clock::now();
+        double par_ns = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+        printf("%-42s  %.1f ms  (speedup=%.1fx, sum=%lld)\n",
+               "ws_pool vector sum 4 workers", par_ns / 1e6,
+               seq_ns / par_ns, par_sum);
     }
 
     return 0;

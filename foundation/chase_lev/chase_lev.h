@@ -31,10 +31,12 @@
 // Owner push (the fast path):
 //   1. If buffer full: grow (2× capacity, copy elements, keep old array).
 //   2. data[b % cap].store(val, relaxed)
-//   3. fence(release)  — makes the data store visible before bottom advances
-//   4. bottom_.store(b+1, relaxed)
-//   No CAS; no locks. The release fence + relaxed store on bottom is a valid
-//   "fence-release" that synchronizes with steal()'s acquire load of bottom.
+//   3. bottom_.store(b+1, release)  — release makes data visible to stealers
+//   No CAS; no locks. The release store on bottom synchronizes with steal()'s
+//   acquire load of bottom, ensuring data[b] is visible to any thief that
+//   reads bottom = b+1. This is semantically equivalent to the original
+//   fence(release) + relaxed-bottom pattern from the Lê et al. paper, but
+//   expressed as a single release store so TSan can model the synchronization.
 //
 // Owner pop — LIFO, opposite end from steal:
 //   1. bottom_.store(b-1, relaxed)     — tentatively claim the last slot
@@ -149,8 +151,13 @@ public:
             a = grow(a, t, b);
 
         a->store(b, val);
-        std::atomic_thread_fence(std::memory_order_release);
-        bottom_.store(b + 1, std::memory_order_relaxed);
+        // Release store on bottom_: all stores sequenced before this
+        // (including a->store) are visible to any steal() that acquires bottom_.
+        // Equivalent to the original fence(release) + relaxed-bottom pattern
+        // per C++11 §29.8p2, but a single release store is directly visible
+        // to TSan's acquire/release model (TSan cannot always track fence-based
+        // synchronization through compound fence + relaxed-store sequences).
+        bottom_.store(b + 1, std::memory_order_release);
     }
 
     // OWNER ONLY: pop from the bottom (LIFO).
