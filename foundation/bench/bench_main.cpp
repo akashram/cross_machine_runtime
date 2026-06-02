@@ -8,6 +8,7 @@
 #include "rcu/rcu_ptr.h"
 #include "freelist/freelist.h"
 #include "msqueue/ms_queue.h"
+#include "chase_lev/chase_lev.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -632,6 +633,84 @@ int main() {
         run_ms("ms_queue 1P-1C throughput", 1, 1);
         run_ms("ms_queue 2P-2C throughput", 2, 2);
         run_ms("ms_queue 4P-4C throughput", 4, 4);
+    }
+
+    printf("\n--- ChaseLevDeque (work-stealing deque) ---\n\n");
+
+    // --- Benchmark 19: owner push+pop roundtrip (no thieves, 1 thread) ---
+    //
+    // Push one item then immediately pop it — no CAS involved on the hot path.
+    // Owner push: relaxed store to data[], release fence, relaxed store to bottom_.
+    // Owner pop (non-last case): relaxed store to bottom_, seq_cst fence,
+    //   relaxed load of top_, relaxed load of data[], relaxed restore of bottom_.
+    //
+    // The seq_cst fence in pop() is the dominant cost on x86 (MFENCE ~10 ns).
+    // With exactly one item, pop() also does a seq_cst CAS (as the "last element"
+    // race path is always triggered). Expected: ~25–40 ns.
+    //
+    // Compare with MpmcQueue roundtrip (~21 ns) and MsQueue (~250 ns).
+    // ChaseLev is faster than MsQueue (no malloc) and competitive with MPMC.
+    {
+        foundation::ChaseLevDeque<uint64_t> dq;
+        auto result = bench::run_bench("chase_lev  push+pop (1T, no CAS fast path)", 500'000, 10'000,
+            [&]() {
+                dq.push(1ULL);
+                auto v = dq.pop();
+                do_not_optimize(v);
+            });
+        bench::print_result(result);
+    }
+
+    // --- Benchmark 20: steal throughput (1 owner, N thieves) ---
+    //
+    // Owner pushes at full speed; N thief threads steal at full speed.
+    // This is the steady-state of a work-stealing thread pool where one thread
+    // generates tasks and others consume them. Steal() does:
+    //   acquire load of top_, seq_cst fence, acquire load of bottom_,
+    //   acquire load of array_, relaxed load of data[], seq_cst CAS on top_.
+    //
+    // Contention on top_: all N thieves race on the same atomic. With N thieves,
+    // most CAS calls fail and retry. Throughput scales sublinearly.
+    {
+        auto run_steal = [](const char* label, int n_thieves) {
+            constexpr std::size_t kItems = 2'000'000;
+            foundation::ChaseLevDeque<uint64_t> dq;
+            std::atomic<bool> go{false};
+            std::atomic<std::size_t> stolen{0};
+
+            // Pre-push all items so owner doesn't interfere.
+            for (std::size_t i = 0; i < kItems; ++i)
+                dq.push(static_cast<uint64_t>(i));
+
+            std::vector<std::thread> thieves;
+            thieves.reserve(static_cast<std::size_t>(n_thieves));
+            for (int i = 0; i < n_thieves; ++i) {
+                thieves.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    while (stolen.load(std::memory_order_relaxed) < kItems) {
+                        auto v = dq.steal();
+                        if (v) {
+                            do_not_optimize(*v);
+                            stolen.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                });
+            }
+
+            auto t0 = std::chrono::steady_clock::now();
+            go.store(true, std::memory_order_release);
+            for (auto& t : thieves) t.join();
+            auto t1 = std::chrono::steady_clock::now();
+
+            double ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+            printf("%-44s  %.1f ns/steal  (%.0f M/sec)\n",
+                   label, ns / kItems, kItems / ns * 1000.0);
+        };
+
+        run_steal("chase_lev steal throughput 1T", 1);
+        run_steal("chase_lev steal throughput 2T", 2);
+        run_steal("chase_lev steal throughput 4T", 4);
     }
 
     return 0;
