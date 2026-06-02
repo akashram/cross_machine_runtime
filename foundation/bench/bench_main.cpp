@@ -7,6 +7,7 @@
 #include "epoch/epoch_stack.h"
 #include "rcu/rcu_ptr.h"
 #include "freelist/freelist.h"
+#include "msqueue/ms_queue.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -542,6 +543,95 @@ int main() {
         run("freelist throughput 1T", 1);
         run("freelist throughput 2T", 2);
         run("freelist throughput 4T", 4);
+    }
+
+    printf("\n--- MsQueue (Michael-Scott lock-free FIFO) ---\n\n");
+
+    // --- Benchmark 17: MsQueue single-thread enqueue+dequeue roundtrip ---
+    //
+    // Each iteration: new Node (malloc) + two CAS operations (enqueue) +
+    // two CAS operations (dequeue) + HP scan (amortized) + delete.
+    //
+    // Compare with MpmcQueue (pre-allocated ring buffer):
+    //   MpmcQueue: no allocation, one CAS each way, ~21 ns (bench 7)
+    //   MsQueue:   one malloc + one delete + more CAS overhead + HP
+    //
+    // The MS queue pays for heap allocation per element. Its advantage is
+    // unbounded capacity (grows dynamically) vs. the ring buffer's fixed size.
+    // In practice, MS queue is ~5–10x slower than MPMC for the single-thread
+    // case because malloc/free dominates.
+    {
+        foundation::MsQueue<uint64_t> q;
+        uint64_t sink = 0;
+        auto result = bench::run_bench("ms_queue  enq+deq (1T, new+delete per elem)", 200'000, 5'000,
+            [&]() {
+                q.enqueue(1ULL);
+                q.dequeue(sink);
+                do_not_optimize(sink);
+            });
+        bench::print_result(result);
+        q.drain();
+    }
+
+    // --- Benchmark 18: MsQueue throughput 1P-1C and 2P-2C ---
+    //
+    // Cross-thread case: producer and consumer on different cores. The node
+    // (cache line) must travel from producer to consumer — same coherence cost
+    // as MPMC, but with the additional malloc/free overhead on each side.
+    //
+    // The HP scan is amortized: with one record (2 slots), scan threshold =
+    // 2 * 1 * 2 = 4. Every 4th dequeue triggers a full scan. In the 1P-1C
+    // case, this is cheap (1 record to scan). In the 4P-4C case, 8 records.
+    {
+        auto run_ms = [](const char* label, int n_prod, int n_cons) {
+            constexpr std::size_t kItems = 1'000'000;
+            foundation::MsQueue<uint64_t> q;
+            std::atomic<bool> go{false};
+            std::atomic<uint64_t> push_idx{0};
+            std::atomic<std::size_t> pop_count{0};
+
+            std::vector<std::thread> producers;
+            for (int i = 0; i < n_prod; ++i) {
+                producers.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    for (;;) {
+                        uint64_t val = push_idx.fetch_add(1, std::memory_order_relaxed);
+                        if (val >= kItems) break;
+                        q.enqueue(val);
+                    }
+                });
+            }
+
+            std::vector<std::thread> consumers;
+            for (int i = 0; i < n_cons; ++i) {
+                consumers.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    while (pop_count.load(std::memory_order_relaxed) < kItems) {
+                        uint64_t v;
+                        if (q.dequeue(v)) {
+                            do_not_optimize(v);
+                            pop_count.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                });
+            }
+
+            auto t0 = std::chrono::steady_clock::now();
+            go.store(true, std::memory_order_release);
+            for (auto& t : producers) t.join();
+            for (auto& t : consumers) t.join();
+            auto t1 = std::chrono::steady_clock::now();
+            q.drain();
+
+            double ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+            printf("%-40s  %.1f ns/item  (%.0f M items/sec)\n",
+                   label, ns / kItems, kItems / ns * 1000.0);
+        };
+
+        run_ms("ms_queue 1P-1C throughput", 1, 1);
+        run_ms("ms_queue 2P-2C throughput", 2, 2);
+        run_ms("ms_queue 4P-4C throughput", 4, 4);
     }
 
     return 0;
