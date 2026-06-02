@@ -11,7 +11,8 @@ Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 - Phase 1, step 6 (hazard pointers, `foundation/hazard/`) — done. HazardDomain (global retire list, seq_cst slots, domain ID for tl() safety) + HazardStack<T>. 214 ns roundtrip. TSan clean.
 - Phase 1, step 7 (epoch-based reclamation, `foundation/epoch/`) — done. EpochDomain (3-slot epoch cycling, global retire list) + EpochStack<T> (plain CAS — EBR prevents ABA implicitly). 171 ns roundtrip. TSan clean. Design doc in header: when to choose EBR vs hazard pointers.
 - Phase 1, step 8 (RCU, `foundation/rcu/`) — done. RcuDomain (per-thread even/odd counter, synchronize() waits for active readers) + RcuPtr<T> (read-mostly atomic pointer). Read side: 31 ns (2× seq_cst fetch_add + acquire load). Write amortized: 58 ns (exchange + retire batch, synchronize() every 64 retires). TSan clean. Design doc in header: when to choose RCU vs EBR.
-- Next: Phase 1, step 9 — lock-free freelist (`foundation/freelist/`)
+- Phase 1, step 9 (lock-free freelist, `foundation/freelist/`) — done. FreeList<T> with index-based next_ array (avoids union aliasing TSan race), 64-bit packed (idx, tag) head CAS, 32-bit ABA tag. acquire()+release(): 24 ns (2× LOCK CMPXCHG). macOS malloc is faster for tiny objects (9.5 ns TLS magazine); FreeList advantage is bounded latency + contended multi-thread. Design doc: why tagged pointers not HP for pool recycle. TSan clean.
+- Next: Phase 1, step 10 — Michael-Scott lock-free queue (`foundation/msqueue/`)
 
 ## Tooling decisions
 - **Compiler:** Apple clang 14. No pre-built LLVM binaries exist for Intel macOS — brew always builds from source (2-5 hrs). Apple clang handles C++20/23 and all sanitizers fine for Phase 1.

@@ -6,6 +6,7 @@
 #include "hazard/hazard_stack.h"
 #include "epoch/epoch_stack.h"
 #include "rcu/rcu_ptr.h"
+#include "freelist/freelist.h"
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -418,6 +419,129 @@ int main() {
 
         domain.reclaim_all();
         // ~RcuPtr deletes the final value
+    }
+
+    printf("\n--- FreeList (lock-free object pool) ---\n\n");
+
+    // --- Benchmark 15: FreeList acquire+release vs new+delete (1 thread) ---
+    //
+    // FreeList: acquire() = one 64-bit CAS pop; release() = one 64-bit CAS push.
+    // No heap interaction after construction — all slots are pre-allocated.
+    // The CAS is uncontended (single thread), so it always succeeds first try.
+    // Cost: 2× LOCK CMPXCHG (8B) ≈ 20–30 ns on x86.
+    //
+    // new/delete: macOS libmalloc uses per-thread magazines for small (<256B)
+    // allocations — essentially a thread-local bump pointer. For an 8-byte
+    // uint64_t, this is extremely fast (~10 ns). For large/irregular objects
+    // the allocator must search size classes and occasionally synchronize.
+    //
+    // Result: FreeList is SLOWER than malloc for tiny objects on a single thread.
+    // The FreeList advantage emerges when:
+    //   1. Object construction is expensive (construct once, reuse many times)
+    //   2. Multiple threads contend on malloc (magazine exhaustion triggers a lock)
+    //   3. Latency determinism matters (malloc has unbounded tail latency;
+    //      FreeList acquire/release are O(1) worst-case with bounded CAS retries)
+    //   4. Objects are large enough that malloc bookkeeping dominates
+    //
+    // The struct benchmark below (64B) shows a crossover point.
+    {
+        foundation::FreeList<uint64_t> pool(1);
+        auto result = bench::run_bench("freelist  acquire+release 8B  (1T)", 500'000, 10'000,
+            [&]() {
+                uint64_t* p = pool.acquire();
+                *p = 1;
+                do_not_optimize(*p);
+                pool.release(p);
+            });
+        bench::print_result(result);
+    }
+
+    {
+        auto result = bench::run_bench("new/delete 8B uint64_t        (1T, baseline)", 500'000, 10'000,
+            [&]() {
+                auto* p = new uint64_t{1};
+                do_not_optimize(*p);
+                delete p;
+            });
+        bench::print_result(result);
+    }
+
+    // 64-byte struct: malloc bookkeeping is proportionally smaller fraction
+    // of total cost, but FreeList still avoids all heap interaction.
+    {
+        struct alignas(64) Obj64 { std::byte data[64]; };
+        foundation::FreeList<Obj64> pool(1);
+        auto result = bench::run_bench("freelist  acquire+release 64B (1T)", 500'000, 10'000,
+            [&]() {
+                Obj64* p = pool.acquire();
+                do_not_optimize(p->data[0]);
+                pool.release(p);
+            });
+        bench::print_result(result);
+    }
+
+    {
+        struct alignas(64) Obj64 { std::byte data[64]; };
+        auto result = bench::run_bench("new/delete 64B struct          (1T, baseline)", 500'000, 10'000,
+            [&]() {
+                auto* p = new Obj64;
+                do_not_optimize(p->data[0]);
+                delete p;
+            });
+        bench::print_result(result);
+    }
+
+    // --- Benchmark 16: FreeList throughput under contention (N threads) ---
+    //
+    // Each of N threads spins on acquire → write → release. The gap between
+    // 1-thread and N-thread throughput reflects:
+    //   (a) CAS retry overhead (failed CAS on contended head_)
+    //   (b) MESI invalidation: head_ (8 bytes) bounces between cores on every
+    //       successful CAS — ~100–300 ns cross-core round trip on Intel.
+    //
+    // This is the primary scenario where FreeList beats malloc: malloc under
+    // contention must take a lock or use an OS primitive. FreeList never blocks
+    // (only spins), giving better worst-case latency at the cost of higher
+    // average retry count.
+    {
+        auto run = [](const char* label, int n_threads) {
+            constexpr std::size_t kOps = 2'000'000;
+            // 4× slots per thread avoids exhaustion at peak concurrency.
+            foundation::FreeList<uint64_t> pool(static_cast<std::size_t>(n_threads) * 4);
+            std::atomic<bool> go{false};
+            std::atomic<std::size_t> done{0};
+
+            std::vector<std::thread> threads;
+            threads.reserve(static_cast<std::size_t>(n_threads));
+            for (int t = 0; t < n_threads; ++t) {
+                threads.emplace_back([&]() {
+                    while (!go.load(std::memory_order_acquire)) {}
+                    std::size_t local = 0;
+                    while (done.load(std::memory_order_relaxed) < kOps) {
+                        uint64_t* p = pool.acquire();
+                        if (p) {
+                            *p = static_cast<uint64_t>(local++);
+                            pool.release(p);
+                            done.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                });
+            }
+
+            auto t0 = std::chrono::steady_clock::now();
+            go.store(true, std::memory_order_release);
+            for (auto& t : threads) t.join();
+            auto t1 = std::chrono::steady_clock::now();
+
+            double ns = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
+            printf("%-40s  %.1f ns/op  (%.0f M ops/sec)\n",
+                   label, ns / kOps, kOps / ns * 1000.0);
+        };
+
+        run("freelist throughput 1T", 1);
+        run("freelist throughput 2T", 2);
+        run("freelist throughput 4T", 4);
     }
 
     return 0;
