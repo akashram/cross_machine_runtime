@@ -1,6 +1,7 @@
 #include "bench.h"
 #include "arena/arena.h"
 #include "numa/numa.h"
+#include "perf/perf.h"
 #include "spsc_queue.h"
 #include "mpmc_queue.h"
 #include "aba/aba_demo.h"
@@ -14,7 +15,9 @@
 #include "ws_pool/ws_pool.h"
 #include <atomic>
 #include <cstdio>
+#include <numeric>
 #include <thread>
+#include <vector>
 #include <chrono>
 
 // Prevents the compiler from optimizing away a value entirely.
@@ -909,6 +912,87 @@ int main() {
         } else {
             printf("  (single-node platform: cross-node benchmark skipped;\n"
                    "   run on a Linux 2-socket machine to see ~50-100%% penalty)\n");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Hardware counter analysis
+    // -----------------------------------------------------------------------
+    // Measures IPC, LLC miss rate, and branch miss rate on a selection of
+    // workloads.  On Linux these come from perf_event_open(); on macOS
+    // the counter infrastructure is unavailable (see perf/perf.h).
+    //
+    // Reading guide:
+    //   IPC   — instructions per cycle.  > 2 = good.  < 1 = memory/branch bound.
+    //   L3miss — fraction of LLC accesses that go to DRAM.  < 1% = data is hot.
+    //   Brmiss — fraction of branches mispredicted.  < 1% = predictor works.
+    // -----------------------------------------------------------------------
+    printf("\n--- Hardware counter analysis ---\n");
+    {
+        foundation::PerfCounters probe;
+        if (!probe.available()) {
+            printf("  perf counters not available on this platform (macOS).\n");
+            printf("  On Linux with perf_event_paranoid <= 2, this section will\n");
+            printf("  show IPC / L3-miss-rate / branch-miss-rate per workload.\n");
+            printf("  Expected values (AWS c5.2xlarge, Intel Xeon Platinum 8275CL):\n");
+            printf("    sequential int sum (hot data): IPC~3.5  L3miss~0%%  Brmiss~0.1%%\n");
+            printf("    random pointer chase (cold):   IPC~0.3  L3miss~50%% Brmiss~0.5%%\n");
+            printf("    branch-heavy sort:             IPC~1.5  L3miss~2%%  Brmiss~5%%\n");
+        } else {
+            // Workload A: sequential integer sum (cache-warm, predictable)
+            {
+                constexpr std::size_t kN = 1 << 20;
+                std::vector<int32_t> data(kN);
+                std::iota(data.begin(), data.end(), 0);
+                volatile int64_t sink = 0;
+                auto snap = foundation::measure_perf(100'000, [&]{
+                    // Sum a 64-element chunk — fits in L1 after warmup
+                    int64_t s = 0;
+                    for (std::size_t i = 0; i < 64; ++i) s += data[i];
+                    sink = sink + s;
+                });
+                printf("  sequential int sum (64-elem, L1-hot):\n");
+                snap.print();
+            }
+
+            // Workload B: random pointer chase (LLC-thrashing)
+            {
+                constexpr std::size_t kN = 1 << 22;  // 16 MB — beyond L3 on most CPUs
+                std::vector<std::size_t> ptrs(kN);
+                // Build a random cycle through all indices
+                std::iota(ptrs.begin(), ptrs.end(), 0);
+                // Fisher-Yates shuffle with splitmix64
+                uint64_t rng_state = 0xdeadbeefcafe1234ULL;
+                auto rng_next = [&]() -> uint64_t {
+                    rng_state += 0x9e3779b97f4a7c15ULL;
+                    uint64_t z = rng_state;
+                    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+                    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+                    return z ^ (z >> 31);
+                };
+                for (std::size_t i = kN - 1; i > 0; --i) {
+                    std::size_t j = static_cast<std::size_t>(rng_next()) % (i + 1);
+                    std::swap(ptrs[i], ptrs[j]);
+                }
+                volatile std::size_t idx = 0;
+                auto snap = foundation::measure_perf(10'000, [&]{
+                    idx = ptrs[idx % kN];
+                });
+                printf("  random pointer chase (16MB, LLC-thrashing):\n");
+                snap.print();
+            }
+
+            // Workload C: arena bump alloc (should show high IPC, low miss)
+            {
+                foundation::Arena arena(64u << 20);
+                volatile void* sink = nullptr;
+                auto snap = foundation::measure_perf(100'000, [&]{
+                    if (arena.used() + 32 > arena.capacity()) arena.reset();
+                    sink = arena.alloc(32, 32);
+                });
+                printf("  arena bump alloc 32B:\n");
+                snap.print();
+            }
         }
     }
 

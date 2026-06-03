@@ -2,6 +2,9 @@
 
 Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 
+## Phase 1 complete (steps 1–18)
+All 18 steps done. Next: scaffold phases 2–12 with real sample implementations.
+
 ## Current status
 - Phase 1, step 1 (CMake skeleton) — done
 - Phase 1, step 2 (TSC benchmarking harness, `foundation/bench/bench.h`) — done
@@ -20,7 +23,7 @@ Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 - Phase 1, step 15 (NUMA-aware allocator, `foundation/numa/`) — done. NumaTopology (sysfs on Linux, sysctl on macOS, cpulist parser), bind_thread_to_node (pthread_setaffinity_np on Linux / advisory hint on macOS), NumaArena (per-node SizeClassedArena, mbind via SYS_mbind syscall on Linux — no libnuma dep). 10 tests pass, 2 skip on single-node (multi-node test and concurrent test both skip correctly — real race if run on macOS since all threads map to node 0). TSan clean. Bench: 11.3 ns on macOS (same as local arena, no cross-node). Cross-node bench stub runs on Linux 2-socket.
 - Phase 1, step 16 (unified tensor handle v1, `foundation/tensor/`) — done. TensorHandle: shared_ptr ref-counted buffer, void* data (offset for views), byte strides (not element strides), Dtype enum (8 types), Device enum (CPU/CUDA/FPGA stubs). Zero virtual dispatch — dtype dispatch is caller-side via switch(dtype()). Views: transpose (swap strides), slice (offset data + rescale stride), reshape (requires contiguous). element access via at<T>(indices). 14 tests, zero warnings, TSan clean. Bug caught: std::aligned_alloc on macOS rejected size/alignment combos — replaced with malloc (16-byte system alignment covers all dtypes ≤ 8 bytes).
 - Phase 1, step 17 (property-based testing, `foundation/proptest/`) — done. Minimal QuickCheck-style framework: splitmix64 RNG (deterministic by seed), Gen<T> generator type (complexity-scaled), shrink() specializations for int/size_t/vector<T>, greedy shrink loop, check() template. Properties verified: SPSC FIFO + no-loss, MPMC no-loss (3P×3C), freelist bounded + no-loss, MsQueue FIFO + no-loss, arena non-overlap + reset-rewinds, TensorHandle numel/strides/transpose-involution/reshape. TSan clean. Bug caught: MPMC consumers deadlocked because only one thread hit the break condition — fixed by using a shared atomic load as exit condition.
-- Next: Phase 1, step 18 — x86 hardware counter infrastructure (`foundation/perf/`)
+- Phase 1, step 18 (hardware counter infrastructure, `foundation/perf/`) — done. PerfCounters: perf_event_open() event group (cycles/insn/LLC-refs/LLC-misses/branches/branch-misses), PERF_FORMAT_GROUP atomic read, multiplexing correction via time_enabled/time_running ratio, exclude_kernel=1. macOS: RDTSC fallback, available()=false. measure_perf() helper. bench_main integrated: shows IPC/L3miss/Brmiss on Linux; macOS prints expected values for reference. 6 tests, TSan clean.
 
 ## Tooling decisions
 - **Compiler:** Apple clang 14. No pre-built LLVM binaries exist for Intel macOS — brew always builds from source (2-5 hrs). Apple clang handles C++20/23 and all sanitizers fine for Phase 1.
