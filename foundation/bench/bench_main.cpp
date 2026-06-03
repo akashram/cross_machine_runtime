@@ -1,5 +1,6 @@
 #include "bench.h"
 #include "arena/arena.h"
+#include "numa/numa.h"
 #include "spsc_queue.h"
 #include "mpmc_queue.h"
 #include "aba/aba_demo.h"
@@ -868,6 +869,47 @@ int main() {
             });
         bench::print_result(r);
         ::free(last);
+    }
+
+    // -----------------------------------------------------------------------
+    // NUMA allocator benchmarks
+    // -----------------------------------------------------------------------
+    printf("\n--- NUMA allocator ---\n");
+    {
+        auto topo = foundation::NumaTopology::detect();
+        printf("Topology: %d node(s), %d CPU(s)\n", topo.num_nodes, topo.num_cpus);
+
+        auto na = foundation::NumaArena::make(topo, 64u << 20);
+
+        // Bench: local-node alloc+free (node 0), 32-byte objects
+        {
+            void* last = na.alloc_on_node(0, 32);
+            auto r = bench::run_bench("numa_arena alloc+free node-0 32B", 500'000, 100,
+                [&na, &last]() {
+                    na.free_on_node(0, last, 32);
+                    last = na.alloc_on_node(0, 32);
+                    do_not_optimize(last);
+                });
+            bench::print_result(r);
+            na.free_on_node(0, last, 32);
+        }
+
+        // Bench: cross-node alloc — only meaningful on Linux multi-node machines
+        if (topo.num_nodes >= 2) {
+            void* last = na.alloc_on_node(1, 32);
+            auto r = bench::run_bench("numa_arena alloc+free node-1 32B (cross-node)", 500'000, 100,
+                [&na, &last]() {
+                    na.free_on_node(1, last, 32);
+                    last = na.alloc_on_node(1, 32);
+                    do_not_optimize(last);
+                });
+            bench::print_result(r);
+            na.free_on_node(1, last, 32);
+            printf("  ^ cross-node penalty visible above (expected +50-100%% vs node-0)\n");
+        } else {
+            printf("  (single-node platform: cross-node benchmark skipped;\n"
+                   "   run on a Linux 2-socket machine to see ~50-100%% penalty)\n");
+        }
     }
 
     return 0;

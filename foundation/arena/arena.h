@@ -156,6 +156,7 @@ public:
     }
 
     bool        is_hugepage() const noexcept { return hugepage_; }
+    char*       base()        const noexcept { return base_; }
     bool        owns(const void* p) const noexcept {
         auto a = reinterpret_cast<uintptr_t>(p);
         return a >= reinterpret_cast<uintptr_t>(base_) &&
