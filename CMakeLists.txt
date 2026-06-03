@@ -12,3 +12,4 @@ include(cmake/CompilerWarnings.cmake)
 enable_testing()
 
 add_subdirectory(foundation)
+add_subdirectory(cpu_engine)
