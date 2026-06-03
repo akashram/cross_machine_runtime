@@ -33,3 +33,18 @@ set_project_warnings(jitter_bench)
 if(UNIX AND NOT APPLE)
     target_link_libraries(jitter_bench PRIVATE pthread)
 endif()
+
+add_executable(nt_store_bench nt_store_bench.cpp)
+target_include_directories(nt_store_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..    # nt_store/, affinity/, hugepage/
+    ${CMAKE_SOURCE_DIR}               # foundation/bench/bench.h, foundation/perf/perf.h
+)
+target_compile_features(nt_store_bench PRIVATE cxx_std_23)
+set_project_warnings(nt_store_bench)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_options(nt_store_bench PRIVATE -mavx2)
+endif()
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(nt_store_bench PRIVATE pthread)
+endif()
