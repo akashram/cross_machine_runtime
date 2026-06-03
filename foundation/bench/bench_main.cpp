@@ -1,4 +1,5 @@
 #include "bench.h"
+#include "arena/arena.h"
 #include "spsc_queue.h"
 #include "mpmc_queue.h"
 #include "aba/aba_demo.h"
@@ -792,6 +793,81 @@ int main() {
         printf("%-42s  %.1f ms  (speedup=%.1fx, sum=%lld)\n",
                "ws_pool vector sum 4 workers", par_ns / 1e6,
                seq_ns / par_ns, par_sum);
+    }
+
+    // -----------------------------------------------------------------------
+    // Arena allocator benchmarks
+    // -----------------------------------------------------------------------
+    printf("\n--- Arena allocator ---\n");
+
+    // Bench: Arena bump-only alloc (no free), 32-byte objects
+    {
+        foundation::Arena arena(64u << 20);  // 64 MiB slab
+        auto r = bench::run_bench("arena bump alloc 32B", 500'000, 100,
+            [&arena]() {
+                do_not_optimize(arena.alloc(32, 32));
+            });
+        bench::print_result(r);
+    }
+
+    // Bench: SizeClassedArena alloc+free (freelist path), 32-byte objects
+    {
+        foundation::SizeClassedArena sc(64u << 20);
+        void* last = sc.alloc(32);
+        auto r = bench::run_bench("sc_arena alloc+free 32B (freelist)", 500'000, 100,
+            [&sc, &last]() {
+                sc.free(last, 32);
+                last = sc.alloc(32);
+                do_not_optimize(last);
+            });
+        bench::print_result(r);
+    }
+
+    // Bench: malloc alloc+free, 32-byte objects
+    {
+        void* last = ::malloc(32);
+        auto r = bench::run_bench("malloc+free 32B", 500'000, 100,
+            [&last]() {
+                ::free(last);
+                last = ::malloc(32);
+                do_not_optimize(last);
+            });
+        bench::print_result(r);
+        ::free(last);
+    }
+
+    // Bench: ThreadLocalArena alloc+free, mixed sizes
+    {
+        static const std::size_t kSizes[] = {8, 32, 128, 512};
+        std::size_t idx = 0;
+        void* last = foundation::ThreadLocalArena::alloc(8);
+        std::size_t last_sz = 8;
+        auto r = bench::run_bench("thread_local_arena mixed sizes", 500'000, 100,
+            [&]() {
+                foundation::ThreadLocalArena::free(last, last_sz);
+                last_sz = kSizes[idx++ & 3];
+                last = foundation::ThreadLocalArena::alloc(last_sz);
+                do_not_optimize(last);
+            });
+        bench::print_result(r);
+        foundation::ThreadLocalArena::free(last, last_sz);
+    }
+
+    // Bench: malloc alloc+free, same mixed sizes
+    {
+        static const std::size_t kSizes[] = {8, 32, 128, 512};
+        std::size_t idx = 0;
+        void* last = ::malloc(8);
+        std::size_t last_sz = 8;
+        auto r = bench::run_bench("malloc+free mixed sizes", 500'000, 100,
+            [&]() {
+                ::free(last);
+                last_sz = kSizes[idx++ & 3];
+                last = ::malloc(last_sz);
+                do_not_optimize(last);
+            });
+        bench::print_result(r);
+        ::free(last);
     }
 
     return 0;
