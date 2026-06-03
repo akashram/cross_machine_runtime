@@ -34,6 +34,17 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(jitter_bench PRIVATE pthread)
 endif()
 
+add_executable(branchless_bench branchless_bench.cpp)
+target_include_directories(branchless_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_SOURCE_DIR}
+)
+target_compile_features(branchless_bench PRIVATE cxx_std_23)
+set_project_warnings(branchless_bench)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(branchless_bench PRIVATE pthread)
+endif()
+
 add_executable(prefetch_bench prefetch_bench.cpp)
 target_include_directories(prefetch_bench PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
