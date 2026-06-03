@@ -14,6 +14,12 @@ target_compile_features(hugepage_test PRIVATE cxx_std_23)
 set_project_warnings(hugepage_test)
 add_test(NAME hugepage_test COMMAND hugepage_test)
 
+add_executable(prefetch_test prefetch_test.cpp)
+target_include_directories(prefetch_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_compile_features(prefetch_test PRIVATE cxx_std_23)
+set_project_warnings(prefetch_test)
+add_test(NAME prefetch_test COMMAND prefetch_test)
+
 add_executable(nt_store_test nt_store_test.cpp)
 target_include_directories(nt_store_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_features(nt_store_test PRIVATE cxx_std_23)
