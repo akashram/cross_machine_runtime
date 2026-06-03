@@ -53,6 +53,15 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "RUNTIME_SANITIZER": "undefined"
       }
+    },
+    {
+      "name": "avx512",
+      "displayName": "AVX-512 Release (Linux only — requires AVX-512 capable CPU)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUNTIME_AVX512": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -60,12 +69,14 @@
     {"name": "release", "configurePreset": "release"},
     {"name": "asan",    "configurePreset": "asan"},
     {"name": "tsan",    "configurePreset": "tsan"},
-    {"name": "ubsan",   "configurePreset": "ubsan"}
+    {"name": "ubsan",   "configurePreset": "ubsan"},
+    {"name": "avx512",  "configurePreset": "avx512"}
   ],
   "testPresets": [
     {"name": "debug",  "configurePreset": "debug",  "output": {"outputOnFailure": true}},
     {"name": "asan",   "configurePreset": "asan",   "output": {"outputOnFailure": true}},
     {"name": "tsan",   "configurePreset": "tsan",   "output": {"outputOnFailure": true}},
-    {"name": "ubsan",  "configurePreset": "ubsan",  "output": {"outputOnFailure": true}}
+    {"name": "ubsan",  "configurePreset": "ubsan",  "output": {"outputOnFailure": true}},
+    {"name": "avx512", "configurePreset": "avx512", "output": {"outputOnFailure": true}}
   ]
 }

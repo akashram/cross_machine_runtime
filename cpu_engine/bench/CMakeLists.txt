@@ -34,6 +34,23 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(jitter_bench PRIVATE pthread)
 endif()
 
+add_executable(avx512_bench avx512_bench.cpp)
+target_include_directories(avx512_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_SOURCE_DIR}
+)
+target_compile_features(avx512_bench PRIVATE cxx_std_23)
+set_project_warnings(avx512_bench)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_options(avx512_bench PRIVATE -mavx2)
+    if(RUNTIME_AVX512)
+        target_compile_options(avx512_bench PRIVATE -mavx512f -mavx512bw -mavx512vl -mavx512dq)
+    endif()
+endif()
+if(UNIX AND NOT APPLE)
+    target_link_libraries(avx512_bench PRIVATE pthread)
+endif()
+
 add_executable(branchless_bench branchless_bench.cpp)
 target_include_directories(branchless_bench PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
