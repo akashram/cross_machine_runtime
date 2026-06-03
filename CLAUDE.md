@@ -2,51 +2,112 @@
 
 Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 
-## Phase 1 complete (steps 1–18)
-All 18 steps done. Next: scaffold phases 2–12 with real sample implementations.
+## Where we are
 
-## Current status
-- Phase 1, step 1 (CMake skeleton) — done
-- Phase 1, step 2 (TSC benchmarking harness, `foundation/bench/bench.h`) — done
-- Phase 1, step 3 (SPSC ring buffer, `foundation/spsc_queue.h`) — done. TSan clean. Benchmarks: 10 ns roundtrip (1T), 106 M items/sec throughput, 44 ns ping-pong RTT (release).
-- Phase 1, step 4 (MPMC ring buffer, `foundation/mpmc_queue.h`) — done. TSan clean. Benchmarks: 21 ns roundtrip (1T), 52 M items/sec 1P-1C, 29 M 2P-2C, 12 M 4P-4C (release). 2x overhead vs SPSC in 1P-1C due to CAS.
-- Phase 1, step 5 (ABA problem, `foundation/aba/`) — done. BuggyStack demo + AbaStack with 16-byte tagged-pointer CAS (cmpxchg16b). 25 ns (8B CAS) vs 39 ns (16B CAS). TSan clean.
-- Phase 1, step 6 (hazard pointers, `foundation/hazard/`) — done. HazardDomain (global retire list, seq_cst slots, domain ID for tl() safety) + HazardStack<T>. 214 ns roundtrip. TSan clean.
-- Phase 1, step 7 (epoch-based reclamation, `foundation/epoch/`) — done. EpochDomain (3-slot epoch cycling, global retire list) + EpochStack<T> (plain CAS — EBR prevents ABA implicitly). 171 ns roundtrip. TSan clean. Design doc in header: when to choose EBR vs hazard pointers.
-- Phase 1, step 8 (RCU, `foundation/rcu/`) — done. RcuDomain (per-thread even/odd counter, synchronize() waits for active readers) + RcuPtr<T> (read-mostly atomic pointer). Read side: 31 ns (2× seq_cst fetch_add + acquire load). Write amortized: 58 ns (exchange + retire batch, synchronize() every 64 retires). TSan clean. Design doc in header: when to choose RCU vs EBR.
-- Phase 1, step 9 (lock-free freelist, `foundation/freelist/`) — done. FreeList<T> with index-based next_ array (avoids union aliasing TSan race), 64-bit packed (idx, tag) head CAS, 32-bit ABA tag. acquire()+release(): 24 ns (2× LOCK CMPXCHG). macOS malloc is faster for tiny objects (9.5 ns TLS magazine); FreeList advantage is bounded latency + contended multi-thread. Design doc: why tagged pointers not HP for pool recycle. TSan clean.
-- Phase 1, step 10 (Michael-Scott queue, `foundation/msqueue/`) — done. MsQueue<T> with embedded HazardDomain (2 HP slots: head + head->next). sentinel/data split via optional<T>. drain_one() helper avoids requiring default-constructible T in destructor. Single-thread: 250 ns enq+deq (malloc-dominated). 1P-1C: 211 ns/item (5 M/sec). TSan clean. Design doc: no tagged pointers needed (HP prevents ABA), copy-before-CAS avoids concurrent write race on node data.
-- Phase 1, step 11 (Chase-Lev deque, `foundation/chase_lev/`) — done. ChaseLevDeque<T> (T must be trivially copyable). Owner push/pop from bottom (LIFO, no CAS in common case). Any thread steals from top (FIFO, one seq_cst CAS). Dual seq_cst fences in pop()+steal() for ARM correctness. Array growth via trash list (freed at destruction). push+pop: 34 ns (fence-dominated). steal 1T: 34 ns, 4T: 90 ns. TSan clean. 6 tests including last-element race (10K rounds).
-- Phase 1, step 12 (work-stealing thread pool, `foundation/ws_pool/`) — done. WorkStealingPool (per-worker Chase-Lev deques, shared inbox for external submits, release-store bottom in push() for TSan visibility). TaskGroup (atomic remaining counter + condvar). parallel_for. 3 bugs fixed during TSan: (1) workers racing on workers_.size() during construction → two-phase init; (2) lost-wakeup in execute() notify without done_mu_ → hold mutex; (3) TSan false positive from fence+relaxed-bottom in Chase-Lev → changed to release-store bottom. ~470 ns/task overhead. 2.2x speedup on 4-worker vector sum. TSan clean. 7 tests.
-- Phase 1, step 13 (coroutine execution engine, `foundation/coro/`) — done. Task<T> (lazy, symmetric transfer, variant result), AwaitableEvent (3-state atomic, set/suspend race), AwaitableMutex (cppcoro-style, intrusive Waiter on coroutine frame, release-store on Waiter::next to fix TSan ABA false positive). 12 tests. TSan clean. Three real bugs caught: (1) done.wait() before pool.wait() left frames live during ~Task(); (2) co_await mu.lock() as bare statement unlocks immediately (Guard is a temporary); (3) TSan ABA false positive on Waiter::next resolved by making it atomic<Waiter*>.
-- Phase 1, step 14 (arena allocator, `foundation/arena/`) — done. Arena (mmap bump, MAP_HUGETLB on Linux / graceful fallback on macOS, MADV_DONTNEED/MADV_FREE_REUSABLE on reset), SizeClassedArena (8 power-of-2 classes 8–1024B, intrusive freelist per class, bit_ceil+ctz lookup), ThreadLocalArena (thread_local backing, zero-atomic fast path). 13 tests, TSan clean. Benchmarks (release): bump alloc 9.7 ns, freelist alloc+free 10.1 ns, malloc+free 59.3 ns (6x faster). Mixed sizes: arena 20.7 ns vs malloc 80.5 ns.
-- Phase 1, step 15 (NUMA-aware allocator, `foundation/numa/`) — done. NumaTopology (sysfs on Linux, sysctl on macOS, cpulist parser), bind_thread_to_node (pthread_setaffinity_np on Linux / advisory hint on macOS), NumaArena (per-node SizeClassedArena, mbind via SYS_mbind syscall on Linux — no libnuma dep). 10 tests pass, 2 skip on single-node (multi-node test and concurrent test both skip correctly — real race if run on macOS since all threads map to node 0). TSan clean. Bench: 11.3 ns on macOS (same as local arena, no cross-node). Cross-node bench stub runs on Linux 2-socket.
-- Phase 1, step 16 (unified tensor handle v1, `foundation/tensor/`) — done. TensorHandle: shared_ptr ref-counted buffer, void* data (offset for views), byte strides (not element strides), Dtype enum (8 types), Device enum (CPU/CUDA/FPGA stubs). Zero virtual dispatch — dtype dispatch is caller-side via switch(dtype()). Views: transpose (swap strides), slice (offset data + rescale stride), reshape (requires contiguous). element access via at<T>(indices). 14 tests, zero warnings, TSan clean. Bug caught: std::aligned_alloc on macOS rejected size/alignment combos — replaced with malloc (16-byte system alignment covers all dtypes ≤ 8 bytes).
-- Phase 1, step 17 (property-based testing, `foundation/proptest/`) — done. Minimal QuickCheck-style framework: splitmix64 RNG (deterministic by seed), Gen<T> generator type (complexity-scaled), shrink() specializations for int/size_t/vector<T>, greedy shrink loop, check() template. Properties verified: SPSC FIFO + no-loss, MPMC no-loss (3P×3C), freelist bounded + no-loss, MsQueue FIFO + no-loss, arena non-overlap + reset-rewinds, TensorHandle numel/strides/transpose-involution/reshape. TSan clean. Bug caught: MPMC consumers deadlocked because only one thread hit the break condition — fixed by using a shared atomic load as exit condition.
-- Phase 1, step 18 (hardware counter infrastructure, `foundation/perf/`) — done. PerfCounters: perf_event_open() event group (cycles/insn/LLC-refs/LLC-misses/branches/branch-misses), PERF_FORMAT_GROUP atomic read, multiplexing correction via time_enabled/time_running ratio, exclude_kernel=1. macOS: RDTSC fallback, available()=false. measure_perf() helper. bench_main integrated: shows IPC/L3miss/Brmiss on Linux; macOS prints expected values for reference. 6 tests, TSan clean.
+**Phase 1: Foundation — COMPLETE (18/18 steps, 2026-06-02)**
+All lock-free data structures, allocators, coroutine engine, tensor handle,
+property-based testing framework, and hardware counter infrastructure are done.
+Every component: TSan clean, zero warnings, benchmarked.
+See git log for per-step detail; PLAN.md for the full spec.
+
+**Next: Phase 2, step 1 — CPU affinity + thread pinning**
+Directory: `cpu_engine/` (new top-level directory, sibling of `foundation/`)
+
+---
+
+## Phase 2: CPU Backend — kickoff notes
+
+Phase 2 lives in `cpu_engine/`. Create it with its own CMakeLists.txt and
+add `add_subdirectory(cpu_engine)` to the root CMakeLists.txt.
+
+### Platform reality
+- **Development:** macOS (Intel, Apple clang 14). Fine for steps 1–6.
+- **AVX-512 (steps 4–9):** macOS Intel does NOT have AVX-512. Need a Linux
+  cloud instance (AWS c5.2xlarge = Xeon Platinum 8275CL, AVX-512 supported).
+  Use `#ifdef __AVX512F__` guards so steps build on macOS without AVX-512.
+- **perf tool (steps 11+):** Linux only (`perf stat`, `perf record`).
+  The `foundation/perf/` PerfCounters from step 18 handles this already.
+- **hugepages (step 2):** `MAP_HUGETLB` = Linux only; `foundation/arena/`
+  already has the pattern — copy it.
+
+### Build order (from PLAN.md)
+1. **CPU affinity + thread pinning** — `pthread_setaffinity_np` wrapper,
+   pin thread to a core, measure scheduling jitter (TSC stddev) with/without.
+   macOS: use `thread_policy_set` hint (advisory, not hard). Linux: hard pin.
+   **THIS IS THE NEXT STEP.**
+
+2. **Hugepage allocator** — 2 MB pages via `mmap(MAP_HUGETLB)` + `mbind`.
+   Benchmark TLB miss reduction vs 4 KB pages. Already have the pattern in
+   `foundation/arena/arena.h` and `foundation/numa/numa.h` — build on that.
+
+3. **OS-level tuning scripts** — `isolcpus`, `nohz_full`, IRQ affinity, C-state
+   disabling, CPU governor scripts. Linux only. Packaged as shell scripts with
+   before/after latency measurements. macOS: document why not applicable.
+
+4. **Non-temporal store primitives** — `_mm_stream_*` wrappers (SSE/AVX),
+   benchmark write-only vs regular stores. Guards for non-x86.
+
+5. **Prefetch primitives** — `__builtin_prefetch` wrappers (T0/T1/T2/NTA),
+   measure prefetch distance vs cache miss rate via PerfCounters.
+
+6. **Branchless primitives** — `cmov` patterns, branchless min/max/abs/clamp.
+   Verify with branch miss rate from PerfCounters.
+
+7. **AVX-512 kernel library** — dot product, matrix-vector multiply,
+   element-wise ops, INT8 ops. NEEDS LINUX/CLOUD. Scalar baseline + 
+   compiler-vectorized comparison always included for macOS CI.
+
+8. **Cache-aware tiling** — blocked matmul, tune tile sizes to L1/L2.
+   PerfCounters-driven measurement at each tile size.
+
+9. **CPU inference engine** — small MLP through AVX-512 kernels, preallocated
+   buffers, no heap on hot path.
+
+10. **Roofline model** — peak FLOPS micro-benchmark, STREAM bandwidth,
+    plot achieved vs ceiling, classify compute-bound vs bandwidth-bound.
+
+11. **Hardware perf counter deep dive** — IPC, L1/L2/L3 miss rates, TLB misses
+    per kernel. Uses `foundation/perf/PerfCounters`.
+
+12. **PGO** — instrument build, representative workload, `-fprofile-use`.
+
+13. **Busy-poll vs OS-wait** — p50/p99/p999 comparison.
+
+### Step 1 design sketch (CPU affinity)
+```
+cpu_engine/
+  affinity/
+    affinity.h       — ThreadPinner class, pin_to_cpu(), current_cpu()
+  test/
+    CMakeLists.txt
+    affinity_test.cpp
+  CMakeLists.txt
+```
+
+`ThreadPinner`: wraps `pthread_setaffinity_np` (Linux) / `thread_policy_set`
+(macOS). Exposes `pin(cpu_id)`, `unpin()`, `current_cpu()`.
+
+Benchmark: measure TSC jitter (stddev of inter-sample deltas) on a pinned
+vs unpinned thread. Expected: pinned ≈ 10–50 ns stddev; unpinned ≈ 200–2000 ns
+(cache migration, branch predictor warm-up loss).
+
+---
 
 ## Tooling decisions
-- **Compiler:** Apple clang 14. No pre-built LLVM binaries exist for Intel macOS — brew always builds from source (2-5 hrs). Apple clang handles C++20/23 and all sanitizers fine for Phase 1.
-- **clang-tidy:** Deferred. Will be set up when LLVM is built from source in Phase 4 step 1 (that build is intentional — it's a learning exercise).
-- **Build system:** Ninja. CMake generates Ninja files.
-- **Presets:** debug, release, asan, tsan, ubsan — each builds to its own `build/<preset>/` directory. Run with `cmake --preset <name>` and `cmake --build --preset <name>`.
+- **Compiler:** Apple clang 14. No pre-built LLVM for Intel macOS.
+- **clang-tidy:** Deferred to Phase 4 step 1 (LLVM source build).
+- **Build system:** Ninja. CMake presets: debug/release/asan/tsan/ubsan.
+  Run: `cmake --preset <name>` then `cmake --build --preset <name>`.
+- **AVX-512:** Requires `--preset release` on a Linux AVX-512 machine.
+  Add a new `avx512` preset when we reach step 7.
 
-## Execution plan (agreed 2026-05-31)
-1. Finish Phase 1 fully (steps 5–18) with real implementations and tests.
-2. Scaffold all phases 2–12 with real sample implementations — actual CUDA kernels, Raft, ZeRO, GBDT, etc. Hardware-gated with #ifdef/find_package where toolchain absent. Written as a safety checkpoint; user will walk through code with Claude to understand it.
-3. Work through phases one by one to build real understanding.
-
-## Phase 12: Machine Learning (added 2026-05-31)
-Inserted after Phase 6 (distributed training), before Phase 9 (inference serving). See PLAN.md for full detail.
-- **12a — Classical ML:** Random Forest, GBT (XGBoost/LightGBM-style), SVM, k-NN, k-means++, PCA
-- **12b — Decision Framework + Benchmarks:** cross-method ablation on OpenML CC-18, written decision criteria, ensemble composition rules, hyperparameter sensitivity analysis
-- **12c — Hyperparameter optimization:** Bayesian opt (GP), TPE, Hyperband/ASHA
-- Benchmark targets: beat LightGBM throughput on large tabular while matching accuracy; compete on MLPerf
-- Design docs are first-class: each algorithm family gets decision criteria, math foundations, failure modes
-
-## Non-negotiable standards (from PLAN.md)
-- Every component is benchmarked before moving on. No "I'll benchmark later."
-- Every data structure has property-based tests verifying linearizability.
-- TSan must find zero races on all lock-free data structures.
+## Non-negotiable standards
+- Every component is benchmarked before moving on.
+- Property-based tests for every data structure.
+- TSan zero races on all concurrent code.
 - Every non-obvious decision gets a written design doc before implementation.
 - Hardware counter data (IPC, cache miss rates) on every CPU benchmark.
+
+## Execution plan (agreed 2026-05-31, updated 2026-06-02)
+Phase 1 done. Moving directly into Phase 2 step by step (skipping the
+"scaffold all phases" checkpoint — user wants to work through them directly).
