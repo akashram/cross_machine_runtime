@@ -107,6 +107,11 @@ vs unpinned thread. Expected: pinned ≈ 10–50 ns stddev; unpinned ≈ 200–2
 - TSan zero races on all concurrent code.
 - Every non-obvious decision gets a written design doc before implementation.
 - Hardware counter data (IPC, cache miss rates) on every CPU benchmark.
+- Every step gets a `README.md` in its component directory written after
+  seeing the measured numbers. Document: what was built, key results table,
+  findings/interpretation, platform notes. See `cpu_engine/tiling/README.md`
+  through `cpu_engine/perf_deep_dive/README.md` for the established format.
+- Commit AND push to origin/main after every completed step.
 
 ## Execution plan (agreed 2026-05-31, updated 2026-06-02)
 Phase 1 done. Moving directly into Phase 2 step by step (skipping the
