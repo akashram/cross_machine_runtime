@@ -118,3 +118,20 @@ endif()
 if(UNIX AND NOT APPLE)
     target_link_libraries(mlp_bench PRIVATE pthread)
 endif()
+
+add_executable(roofline_bench roofline_bench.cpp)
+target_include_directories(roofline_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..    # roofline/, avx512/, tiling/, inference/, affinity/
+    ${CMAKE_SOURCE_DIR}               # foundation/bench/bench.h
+)
+target_compile_features(roofline_bench PRIVATE cxx_std_23)
+set_project_warnings(roofline_bench)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_options(roofline_bench PRIVATE -mavx2 -mfma)
+    if(RUNTIME_AVX512)
+        target_compile_options(roofline_bench PRIVATE -mavx512f -mavx512bw -mavx512vl -mavx512dq)
+    endif()
+endif()
+if(UNIX AND NOT APPLE)
+    target_link_libraries(roofline_bench PRIVATE pthread)
+endif()
