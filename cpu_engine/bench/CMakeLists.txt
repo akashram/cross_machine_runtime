@@ -119,6 +119,23 @@ if(UNIX AND NOT APPLE)
     target_link_libraries(mlp_bench PRIVATE pthread)
 endif()
 
+add_executable(perf_counters_bench perf_counters_bench.cpp)
+target_include_directories(perf_counters_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..    # perf_deep_dive/, avx512/, tiling/, inference/, affinity/
+    ${CMAKE_SOURCE_DIR}               # foundation/bench/bench.h
+)
+target_compile_features(perf_counters_bench PRIVATE cxx_std_23)
+set_project_warnings(perf_counters_bench)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_options(perf_counters_bench PRIVATE -mavx2)
+    if(RUNTIME_AVX512)
+        target_compile_options(perf_counters_bench PRIVATE -mavx512f -mavx512bw -mavx512vl -mavx512dq)
+    endif()
+endif()
+if(UNIX AND NOT APPLE)
+    target_link_libraries(perf_counters_bench PRIVATE pthread)
+endif()
+
 add_executable(roofline_bench roofline_bench.cpp)
 target_include_directories(roofline_bench PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..    # roofline/, avx512/, tiling/, inference/, affinity/
