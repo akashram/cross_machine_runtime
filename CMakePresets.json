@@ -62,15 +62,36 @@
         "CMAKE_BUILD_TYPE": "Release",
         "RUNTIME_AVX512": "ON"
       }
+    },
+    {
+      "name": "pgo-instrument",
+      "displayName": "PGO step 1: instrument (generates .profraw on run)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUNTIME_PGO": "instrument"
+      }
+    },
+    {
+      "name": "pgo-use",
+      "displayName": "PGO step 3: optimise using collected profile",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "RUNTIME_PGO": "use",
+        "PGO_PROFILE_PATH": "${sourceDir}/build/pgo.profdata"
+      }
     }
   ],
   "buildPresets": [
-    {"name": "debug",   "configurePreset": "debug"},
-    {"name": "release", "configurePreset": "release"},
-    {"name": "asan",    "configurePreset": "asan"},
-    {"name": "tsan",    "configurePreset": "tsan"},
-    {"name": "ubsan",   "configurePreset": "ubsan"},
-    {"name": "avx512",  "configurePreset": "avx512"}
+    {"name": "debug",          "configurePreset": "debug"},
+    {"name": "release",        "configurePreset": "release"},
+    {"name": "asan",           "configurePreset": "asan"},
+    {"name": "tsan",           "configurePreset": "tsan"},
+    {"name": "ubsan",          "configurePreset": "ubsan"},
+    {"name": "avx512",         "configurePreset": "avx512"},
+    {"name": "pgo-instrument", "configurePreset": "pgo-instrument"},
+    {"name": "pgo-use",        "configurePreset": "pgo-use"}
   ],
   "testPresets": [
     {"name": "debug",  "configurePreset": "debug",  "output": {"outputOnFailure": true}},

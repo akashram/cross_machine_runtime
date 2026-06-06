@@ -113,22 +113,18 @@ public:
             const float* b = biases_[l].data();
             switch (cfg_.acts[l]) {
                 case Activation::kRelu:
-#pragma clang loop vectorize(enable)
                     for (int m = 0; m < out_dim; ++m)
                         dst[m] = std::max(0.0f, dst[m] + b[m]);
                     break;
 
                 case Activation::kSigmoid:
-#pragma clang loop vectorize(enable)
                     for (int m = 0; m < out_dim; ++m) {
                         float x = dst[m] + b[m];
-                        // Fast sigmoid: 0.5·x/(1+|x|)+0.5  (~0.5% error vs exp)
                         dst[m] = 0.5f * x / (1.0f + std::fabs(x)) + 0.5f;
                     }
                     break;
 
                 case Activation::kNone:
-#pragma clang loop vectorize(enable)
                     for (int m = 0; m < out_dim; ++m)
                         dst[m] += b[m];
                     break;

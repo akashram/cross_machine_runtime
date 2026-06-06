@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(cmake/Sanitizers.cmake)
 include(cmake/CompilerWarnings.cmake)
+include(cmake/Pgo.cmake)
 
 enable_testing()
 
