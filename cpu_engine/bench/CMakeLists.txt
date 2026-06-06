@@ -87,3 +87,17 @@ endif()
 if(UNIX AND NOT APPLE)
     target_link_libraries(nt_store_bench PRIVATE pthread)
 endif()
+
+add_executable(tiling_bench tiling_bench.cpp)
+target_include_directories(tiling_bench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..    # tiling/matmul.h, affinity/affinity.h
+    ${CMAKE_SOURCE_DIR}               # foundation/bench/bench.h, foundation/perf/perf.h
+)
+target_compile_features(tiling_bench PRIVATE cxx_std_23)
+set_project_warnings(tiling_bench)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    target_compile_options(tiling_bench PRIVATE -mavx2)
+endif()
+if(UNIX AND NOT APPLE)
+    target_link_libraries(tiling_bench PRIVATE pthread)
+endif()
