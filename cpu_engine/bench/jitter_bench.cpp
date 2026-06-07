@@ -108,8 +108,12 @@ int main(int argc, char** argv) {
 #ifdef __linux__
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &now, nullptr);
 #else
+        // macOS lacks clock_nanosleep; nanosleep() takes a *relative*
+        // duration, not the absolute deadline in `now` — pass kTargetUs
+        // directly (same relative-sleep pattern as the measurement loop).
+        struct timespec req{ 0, kTargetUs * 1000L };
         struct timespec rem{};
-        nanosleep(&now, &rem);  // macOS: relative sleep (less accurate)
+        nanosleep(&req, &rem);
 #endif
     }
 
