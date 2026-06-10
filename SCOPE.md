@@ -243,6 +243,7 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - gRPC + protobuf for control plane RPC
 - Zero-copy serialization split: protobuf (control plane), flatbuffers/capnproto (data plane hot path)
 - Custom userspace networking stack
+- Anton 3 network (Shim et al., HPCA '22) as a design reference: study how DESRES achieved sub-microsecond all-to-all latency via custom ASIC network co-design — understand the tradeoffs vs. general-purpose EFA and what specialization buys at the extreme end
 
 ## Distributed GPU Training
 - ZeRO optimizer stages (ZeRO-1/2/3): shard optimizer states (ZeRO-1), gradients (ZeRO-2), and parameters (ZeRO-3) across data parallel ranks — measured memory reduction and communication overhead at each stage
@@ -262,6 +263,10 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - NCCL tuning: `NCCL_ALGO`, `NCCL_PROTO`, `NCCL_BUFFSIZE`, `NCCL_SOCKET_NTHREADS` — topology-specific tuning with measured collective throughput before/after
 - Ampere/Hopper 2:4 structured sparsity: hardware-accelerated 2 non-zero per 4 elements, 2x sparse matmul throughput on A100/H100 — model pruning to 2:4 pattern, measured throughput vs. dense baseline
 - Distributed data loading pipeline: DataLoader workers, prefetching, dataset sharding across ranks, WebDataset format for streaming — measured GPU utilization with and without pipeline, ensuring data loading is never the bottleneck
+- Supervised fine-tuning (SFT): instruction-response dataset, loss masking on prompt tokens, per-rank data sharding — establishes the policy initialization for RLHF
+- Reward model training: preference pairs (chosen/rejected), Bradley-Terry objective, ranking accuracy measured on held-out preference set
+- PPO-based RLHF: policy (SFT init) + critic (reward model) + KL penalty against frozen reference model, clip ratio, reward vs. KL divergence tradeoff measured across training, reward hacking monitored
+- DPO (Direct Preference Optimization): offline alternative to PPO — optimize policy directly on preference pairs without a reward model; convergence speed and final reward compared vs. PPO baseline on identical preference data; documented decision guide for when to prefer each
 
 ## Inference Serving Layer
 - Continuous batching
@@ -316,3 +321,4 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - CMake build system (modern, target-based, vcpkg/FetchContent)
 - Public benchmarks vs. ONNX Runtime / XLA / TensorRT
 - Architecture diagrams, latency profiles, tuning decision writeups
+- Python bindings (pybind11): pip-installable package exposing tensor handle, inference engine forward pass, and benchmark harness — latency must match direct C++ call path

@@ -253,6 +253,8 @@ All-reduce within 10% of NCCL throughput. PTP synchronization < 1µs across node
 - 1F1B schedule: "PipeDream: Generalized Pipeline Parallelism for DNN Training"
 - GPipe bubble fraction analysis
 - MoE routing: "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer"
+- InstructGPT (Ouyang et al. 2022): how RLHF with PPO aligns a pretrained LLM — read before implementing steps 22–24
+- DPO (Rafailov et al. 2023): Direct Preference Optimization as a simpler PPO alternative — understand the reparameterization that eliminates the reward model
 
 ### Build order
 1. **Distributed data loading** — WebDataset format, multi-worker DataLoader, dataset sharding across ranks, prefetch queue, measure GPU utilization with and without pipeline. Target: data loading never the bottleneck.
@@ -276,16 +278,21 @@ All-reduce within 10% of NCCL throughput. PTP synchronization < 1µs across node
 19. **Distributed batch normalization** — SyncBatchNorm with all-reduce of mean/variance
 20. **Full training loop** — forward → backward → grad sync → ZeRO optimizer step → checkpoint. Latency breakdown per phase, identify bottleneck.
 21. **2:4 sparsity in training** — structured pruning to 2:4 pattern during training, validate convergence, measure throughput
+22. **Supervised fine-tuning (SFT)** — instruction-response dataset, per-rank data sharding, loss masking on prompt tokens, validate perplexity improvement over base model checkpoint
+23. **Reward model training** — preference pairs (chosen/rejected), Bradley-Terry objective, measure ranking accuracy on held-out preference set, verify reward signal is meaningful before proceeding
+24. **PPO-based RLHF** — policy (SFT init) + critic (reward model) + KL penalty against frozen reference model, clip ratio, measure reward vs. KL divergence tradeoff across training, monitor for reward hacking
+25. **DPO (Direct Preference Optimization)** — offline alternative to PPO: optimize policy directly on preference pairs without a reward model, compare convergence speed and final reward vs. PPO baseline on identical preference data, document when to prefer each
 
 ### Deliverables
 - `/distributed_training/` directory
 - Scaling efficiency chart: throughput vs. number of GPUs (data parallel, tensor parallel, pipeline parallel, 3D)
 - ZeRO memory analysis: memory per rank at each stage
 - MoE routing analysis: expert utilization distribution
+- RLHF vs. DPO comparison: reward, KL divergence, training stability, wall-clock time
 - Design doc: "Distributed Training Architecture"
 
 ### Definition of done
-Linear scaling efficiency > 85% from 1→8 GPUs (data parallel). ZeRO-3 enables training a model 8x larger than fits on a single GPU. 1F1B pipeline bubble fraction < 5% with sufficient microbatches.
+Linear scaling efficiency > 85% from 1→8 GPUs (data parallel). ZeRO-3 enables training a model 8x larger than fits on a single GPU. 1F1B pipeline bubble fraction < 5% with sufficient microbatches. DPO training loop produces a measurably higher-reward policy than SFT baseline on held-out prompts.
 
 ---
 
@@ -508,6 +515,7 @@ This phase demonstrates ML systems depth and empirical judgment. It does NOT rep
 6. **MLSys submission** — identify the most novel contribution (likely: the heterogeneous router + MLIR dialect + FPGA network stack combination), write the paper, submit
 7. **TRC application** (if not already done) — describe the project, apply for free TPU quota
 8. **LLVM upstream** — if any MLIR bugs or improvements found, submit patches
+9. **Python bindings (pybind11)** — expose tensor handle, inference engine forward pass, and benchmark harness to Python; pip-installable package structure; demonstrate running a full MLP forward pass from Python with latency matching the direct C++ call path
 
 ---
 
