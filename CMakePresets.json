@@ -81,6 +81,33 @@
         "RUNTIME_PGO": "use",
         "PGO_PROFILE_PATH": "${sourceDir}/build/pgo.profdata"
       }
+    },
+    {
+      "name": "cuda-debug",
+      "displayName": "CUDA Debug (Linux + GPU required)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CUDA_ARCHITECTURES": "native"
+      }
+    },
+    {
+      "name": "cuda-release",
+      "displayName": "CUDA Release (Linux + GPU required)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "native"
+      }
+    },
+    {
+      "name": "cuda-ci",
+      "displayName": "CUDA CI (multi-arch: T4/A100/A10G/H100)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CUDA_ARCHITECTURES": "75;80;86;90"
+      }
     }
   ],
   "buildPresets": [
@@ -91,7 +118,10 @@
     {"name": "ubsan",          "configurePreset": "ubsan"},
     {"name": "avx512",         "configurePreset": "avx512"},
     {"name": "pgo-instrument", "configurePreset": "pgo-instrument"},
-    {"name": "pgo-use",        "configurePreset": "pgo-use"}
+    {"name": "pgo-use",        "configurePreset": "pgo-use"},
+    {"name": "cuda-debug",     "configurePreset": "cuda-debug"},
+    {"name": "cuda-release",   "configurePreset": "cuda-release"},
+    {"name": "cuda-ci",        "configurePreset": "cuda-ci"}
   ],
   "testPresets": [
     {"name": "debug",  "configurePreset": "debug",  "output": {"outputOnFailure": true}},

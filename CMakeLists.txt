@@ -14,3 +14,12 @@ enable_testing()
 
 add_subdirectory(foundation)
 add_subdirectory(cpu_engine)
+
+include(CheckLanguage)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+  enable_language(CUDA)
+  add_subdirectory(gpu_engine)
+else()
+  message(STATUS "CUDA not found — gpu_engine skipped")
+endif()
