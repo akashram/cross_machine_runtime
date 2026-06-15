@@ -17,7 +17,7 @@ add_subdirectory(device_query)
 # Remaining subdirectories added as steps are implemented:
 add_subdirectory(memory)          # Step 2
 add_subdirectory(streams)         # Step 3
-# add_subdirectory(warp_primitives) # Step 4
+add_subdirectory(warp_primitives)  # Step 4
 # add_subdirectory(shared_mem)    # Step 5
 # add_subdirectory(coalescing)    # Step 6
 # add_subdirectory(occupancy)     # Step 7
