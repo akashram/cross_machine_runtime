@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 3.25)
+
+# Phase 5: Distributed Layer + Networking
+# Requires Linux + libfabric (EFA) + gRPC for most steps.
+# EFA steps require AWS instances in a placement group (p4d.24xlarge).
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(STATUS "networking/ requires Linux — skipping on ${CMAKE_SYSTEM_NAME}")
+  return()
+endif()
+
+# Check for libfabric (required for EFA/RDMA steps)
+find_library(LIBFABRIC_LIB fabric)
+if(NOT LIBFABRIC_LIB)
+  message(STATUS "libfabric not found — networking/ builds what it can (no EFA steps)")
+endif()
+
+add_subdirectory(efa_setup)
+add_subdirectory(rdma_v1)
+add_subdirectory(rdma_onesided)
+add_subdirectory(efa_srd)
+add_subdirectory(ptp)
+add_subdirectory(grpc_control)
+add_subdirectory(flatbuffers_data)
+add_subdirectory(af_xdp)
+add_subdirectory(userspace_net)
+add_subdirectory(nic_deep_dive)
+add_subdirectory(ring_allreduce)
+add_subdirectory(halving_doubling)
+add_subdirectory(tree_allreduce)
+add_subdirectory(collectives)
+add_subdirectory(nccl_tuning)
+add_subdirectory(topo_scheduler)
+add_subdirectory(vector_clocks)
+add_subdirectory(chandy_lamport)
+add_subdirectory(raft)
+add_subdirectory(tla_raft)
+add_subdirectory(backpressure)
+add_subdirectory(hedged_requests)
+add_subdirectory(multitenancy)
+add_subdirectory(chaos)
+add_subdirectory(tla_collective)

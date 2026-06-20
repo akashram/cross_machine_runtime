@@ -1,0 +1,1 @@
+# collectives — stub, requires Linux

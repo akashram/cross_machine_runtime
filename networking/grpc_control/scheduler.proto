@@ -1,0 +1,22 @@
+syntax = "proto3";
+package runtime;
+
+// TODO: implement on Linux with gRPC
+
+service Scheduler {
+  rpc RegisterNode(NodeInfo) returns (NodeId);
+  rpc HealthCheck(NodeId) returns (HealthStatus);
+  rpc DispatchTask(TaskSpec) returns (TaskId);
+  rpc WaitTask(TaskId) returns (TaskResult);
+}
+
+message NodeInfo {
+  string hostname = 1;
+  repeated string devices = 2;  // e.g. ["gpu:0", "gpu:1"]
+}
+
+message NodeId   { string id = 1; }
+message TaskSpec { bytes ir = 1; map<string, string> placement = 2; }
+message TaskId   { string id = 1; }
+message TaskResult { bytes output = 1; string error = 2; }
+message HealthStatus { bool healthy = 1; string message = 2; }

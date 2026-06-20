@@ -8,98 +8,67 @@ Read PLAN.md and SCOPE.md at the start of every session before doing anything.
 All lock-free data structures, allocators, coroutine engine, tensor handle,
 property-based testing framework, and hardware counter infrastructure are done.
 Every component: TSan clean, zero warnings, benchmarked.
-See git log for per-step detail; PLAN.md for the full spec.
 
-**Next: Phase 2, step 1 — CPU affinity + thread pinning**
-Directory: `cpu_engine/` (new top-level directory, sibling of `foundation/`)
+**Phase 2: CPU Backend — COMPLETE (13/13 steps)**
+All CPU affinity, hugepages, OS tuning, SIMD, branchless, AVX-512, tiling,
+inference engine, roofline, perf counters, PGO, and busy-poll steps done.
+Lives in `cpu_engine/`.
+
+**Phase 3: GPU Backend — IN PROGRESS (5/24 steps done)**
+Steps 1–5 implemented (CMake scaffold, GPU memory, streams, warp primitives,
+shared memory). Steps 6–24 are stubs: directory + interface + README with
+measurement TODOs. Lives in `gpu_engine/`.
+
+**Phases 4–10, 12 — STUBBED (2026-06-20)**
+All remaining phases have stub directories, interface headers, CMakeLists.txt,
+and README.md files with design outlines. Nothing has been run on hardware yet.
+Full cloud hardware validation is the next major milestone after stubbing.
 
 ---
 
-## Phase 2: CPU Backend — kickoff notes
+## Execution strategy (updated 2026-06-20)
 
-Phase 2 lives in `cpu_engine/`. Create it with its own CMakeLists.txt and
-add `add_subdirectory(cpu_engine)` to the root CMakeLists.txt.
+**Stub-first, then validate on cloud hardware.**
 
-### Platform reality
-- **Development:** macOS (Intel, Apple clang 14). Fine for steps 1–6.
-- **AVX-512 (steps 4–9):** macOS Intel does NOT have AVX-512. Need a Linux
-  cloud instance (AWS c5.2xlarge = Xeon Platinum 8275CL, AVX-512 supported).
-  Use `#ifdef __AVX512F__` guards so steps build on macOS without AVX-512.
-- **perf tool (steps 11+):** Linux only (`perf stat`, `perf record`).
-  The `foundation/perf/` PerfCounters from step 18 handles this already.
-- **hugepages (step 2):** `MAP_HUGETLB` = Linux only; `foundation/arena/`
-  already has the pattern — copy it.
+All phase directories, API headers, benchmark skeletons, and README outlines
+exist in the repo. The code compiles (or is gated behind hardware checks).
+Real benchmark numbers are TODO throughout stubs.
 
-### Build order (from PLAN.md)
-1. **CPU affinity + thread pinning** — `pthread_setaffinity_np` wrapper,
-   pin thread to a core, measure scheduling jitter (TSC stddev) with/without.
-   macOS: use `thread_policy_set` hint (advisory, not hard). Linux: hard pin.
-   **THIS IS THE NEXT STEP.**
+**When cloud hardware is available, work through stubs in phase order:**
 
-2. **Hugepage allocator** — 2 MB pages via `mmap(MAP_HUGETLB)` + `mbind`.
-   Benchmark TLB miss reduction vs 4 KB pages. Already have the pattern in
-   `foundation/arena/arena.h` and `foundation/numa/numa.h` — build on that.
+### Hardware needed per phase
+| Phase | Hardware | AWS instance |
+|---|---|---|
+| Phase 3 (GPU) | NVIDIA GPU, CUDA | g4dn.xlarge → p3.2xlarge → p4d.24xlarge |
+| Phase 4 (MLIR) | Linux (compile LLVM from source) | any Linux x86 |
+| Phase 5 (Distributed) | Multi-node + EFA | 2× p4d.24xlarge in placement group |
+| Phase 6 (Distributed Training) | Multi-GPU | p4d.24xlarge |
+| Phase 7 (FPGA) | Xilinx UltraScale+ | F1 spot (~$0.50/hr) |
+| Phase 8 (TPU) | Google TPU | GCP v4-8 or TRC |
+| Phase 9 (Inference) | GPU with large VRAM | p3.2xlarge or p4d |
+| Phase 10 (Observability) | Linux (eBPF) | any Linux |
+| Phase 12 (ML) | Any (mostly CPU) | c5.2xlarge |
 
-3. **OS-level tuning scripts** — `isolcpus`, `nohz_full`, IRQ affinity, C-state
-   disabling, CPU governor scripts. Linux only. Packaged as shell scripts with
-   before/after latency measurements. macOS: document why not applicable.
-
-4. **Non-temporal store primitives** — `_mm_stream_*` wrappers (SSE/AVX),
-   benchmark write-only vs regular stores. Guards for non-x86.
-
-5. **Prefetch primitives** — `__builtin_prefetch` wrappers (T0/T1/T2/NTA),
-   measure prefetch distance vs cache miss rate via PerfCounters.
-
-6. **Branchless primitives** — `cmov` patterns, branchless min/max/abs/clamp.
-   Verify with branch miss rate from PerfCounters.
-
-7. **AVX-512 kernel library** — dot product, matrix-vector multiply,
-   element-wise ops, INT8 ops. NEEDS LINUX/CLOUD. Scalar baseline + 
-   compiler-vectorized comparison always included for macOS CI.
-
-8. **Cache-aware tiling** — blocked matmul, tune tile sizes to L1/L2.
-   PerfCounters-driven measurement at each tile size.
-
-9. **CPU inference engine** — small MLP through AVX-512 kernels, preallocated
-   buffers, no heap on hot path.
-
-10. **Roofline model** — peak FLOPS micro-benchmark, STREAM bandwidth,
-    plot achieved vs ceiling, classify compute-bound vs bandwidth-bound.
-
-11. **Hardware perf counter deep dive** — IPC, L1/L2/L3 miss rates, TLB misses
-    per kernel. Uses `foundation/perf/PerfCounters`.
-
-12. **PGO** — instrument build, representative workload, `-fprofile-use`.
-
-13. **Busy-poll vs OS-wait** — p50/p99/p999 comparison.
-
-### Step 1 design sketch (CPU affinity)
-```
-cpu_engine/
-  affinity/
-    affinity.h       — ThreadPinner class, pin_to_cpu(), current_cpu()
-  test/
-    CMakeLists.txt
-    affinity_test.cpp
-  CMakeLists.txt
-```
-
-`ThreadPinner`: wraps `pthread_setaffinity_np` (Linux) / `thread_policy_set`
-(macOS). Exposes `pin(cpu_id)`, `unpin()`, `current_cpu()`.
-
-Benchmark: measure TSC jitter (stddev of inter-sample deltas) on a pinned
-vs unpinned thread. Expected: pinned ≈ 10–50 ns stddev; unpinned ≈ 200–2000 ns
-(cache migration, branch predictor warm-up loss).
+### When returning to a phase on cloud hardware
+1. SSH into the appropriate instance.
+2. `git pull origin/main` to get all stubs.
+3. Build with the appropriate CMake preset for that platform.
+4. Work through stub directories in PLAN.md order within that phase.
+5. Fill in README.md results tables with real numbers.
+6. Commit and push after each step.
 
 ---
 
 ## Tooling decisions
-- **Compiler:** Apple clang 14. No pre-built LLVM for Intel macOS.
-- **clang-tidy:** Deferred to Phase 4 step 1 (LLVM source build).
+- **Compiler:** Apple clang 14 on Mac. GCC/clang on Linux cloud instances.
+- **clang-tidy:** Deferred to Phase 4 step 1 (LLVM source build on Linux).
 - **Build system:** Ninja. CMake presets: debug/release/asan/tsan/ubsan.
   Run: `cmake --preset <name>` then `cmake --build --preset <name>`.
 - **AVX-512:** Requires `--preset release` on a Linux AVX-512 machine.
-  Add a new `avx512` preset when we reach step 7.
+- **CUDA:** GPU stubs build only when `CMAKE_CUDA_COMPILER` is detected.
+  Root CMakeLists.txt gates `add_subdirectory(gpu_engine)` via check_language(CUDA).
+- **MLIR/LLVM:** Build from source on Linux. Deferred entirely to Phase 4.
+- **FPGA (Vitis):** TCL-driven headless Vivado on AWS F1 AMI.
 
 ## Non-negotiable standards
 - Every component is benchmarked before moving on.
@@ -109,10 +78,7 @@ vs unpinned thread. Expected: pinned ≈ 10–50 ns stddev; unpinned ≈ 200–2
 - Hardware counter data (IPC, cache miss rates) on every CPU benchmark.
 - Every step gets a `README.md` in its component directory written after
   seeing the measured numbers. Document: what was built, key results table,
-  findings/interpretation, platform notes. See `cpu_engine/tiling/README.md`
-  through `cpu_engine/perf_deep_dive/README.md` for the established format.
+  findings/interpretation, platform notes.
 - Commit AND push to origin/main after every completed step.
-
-## Execution plan (agreed 2026-05-31, updated 2026-06-02)
-Phase 1 done. Moving directly into Phase 2 step by step (skipping the
-"scaffold all phases" checkpoint — user wants to work through them directly).
+- **Stubs:** README.md files have a `## Results` section marked `TODO: run on [hardware]`.
+  Fill these in with real numbers when validating on cloud hardware.

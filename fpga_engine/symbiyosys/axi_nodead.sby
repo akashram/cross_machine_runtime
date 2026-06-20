@@ -1,0 +1,21 @@
+# axi_nodead.sby — SymbiYosys formal proof: AXI stream never deadlocks
+# TODO: run on Linux with SymbiYosys + Yosys + boolector
+
+[options]
+mode bmc
+depth 20
+
+[engines]
+smtbmc boolector
+
+[script]
+# TODO: read RTL (generated from Vitis HLS co-simulation)
+# read -formal axi_passthrough.v
+# prep -top axi_passthrough
+
+# TODO: add AXI valid/ready liveness property
+# assume property: valid stays high until ready
+# assert property: (valid && !ready) |-> ##[1:20] ready
+
+[files]
+# axi_passthrough.v

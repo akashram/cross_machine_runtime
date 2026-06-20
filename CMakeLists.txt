@@ -23,3 +23,19 @@ if(CMAKE_CUDA_COMPILER)
 else()
   message(STATUS "CUDA not found — gpu_engine skipped")
 endif()
+
+# Phase 4: Compiler/IR (MLIR) — requires MLIR_DIR to be set
+if(DEFINED MLIR_DIR)
+  add_subdirectory(compiler)
+else()
+  message(STATUS "MLIR_DIR not set — compiler/ stub only (skipped)")
+endif()
+
+# Phases 5-10, 12: stubs — each CMakeLists.txt guards itself on missing deps
+add_subdirectory(networking)
+add_subdirectory(distributed_training)
+add_subdirectory(fpga_engine)
+add_subdirectory(tpu_engine)
+add_subdirectory(inference_serving)
+add_subdirectory(observability)
+add_subdirectory(ml)
