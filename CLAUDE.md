@@ -33,10 +33,33 @@ which has no MLIR dependency, compiles with plain `clang++`, and has
 actually been run locally (see `compiler/cost_model/README.md` for
 captured output). See `compiler/DESIGN.md` for the design rationale.
 
-**Phases 5, 6, 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
+**Phase 5: Distributed Layer + Networking — CODE COMPLETE (25/25 steps, 2026-07-19)**
+Shared portable `common/Channel` transport (real POSIX sockets) plus every
+step: EFA/RDMA (code-complete, hardware-gated), PTP, gRPC control plane,
+FlatBuffers data plane, AF_XDP/userspace networking, NIC deep dive,
+ring/halving-doubling/tree all-reduce, the broadcast/reduce-scatter/
+all-gather library, NCCL tuning config, topology-aware scheduler, vector
+clocks, Chandy-Lamport snapshots, Raft consensus (leader election + log
+replication), TLA+ specs for both Raft and the collective protocol,
+backpressure/hedged requests/multi-tenancy, and a chaos engineering
+harness. Lives in `networking/`. Unlike Phases 3–4, **12 of the 25 steps
+are actually built and run locally** (Mac, real sockets/threads, zero
+EFA/Linux dependency) — `common`, `rdma_v1`'s TCP baseline, `efa_srd`,
+`ring_allreduce`, `halving_doubling`, `tree_allreduce`, `collectives`,
+`topo_scheduler`, `vector_clocks`, `chandy_lamport`, `raft`,
+`backpressure`, `hedged_requests`, `multitenancy` all have real captured
+test output in their READMEs (`ctest` in the repo root runs all of them:
+39/39 passing). See `networking/DESIGN.md` for the design rationale and
+several real bugs caught by actually running the code (a ring-algorithm
+chunk-ownership off-by-one, two shutdown-coordination deadlocks). The
+remaining 13 steps are real, complete code gated behind Linux-only kernel
+APIs, a specific NIC, external libraries, GPU hardware, or a Java
+toolchain for TLC — see `networking/README.md`'s status table.
+
+**Phases 6, 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
 outlines exist. Code bodies are still 1–3 line TODOs. Next up, in PLAN.md
-order: Phase 5 (Distributed Layer + Networking).
+order: Phase 6 (Distributed GPU Training).
 
 ---
 

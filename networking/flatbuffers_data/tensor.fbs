@@ -1,0 +1,24 @@
+// tensor.fbs — wire schema for the data plane. Deliberately mirrors
+// foundation/'s unified tensor handle (Phase 1 step 16: device tag, data
+// pointer, shape, strides, dtype) so a TensorDescriptor is "the tensor
+// handle, minus the pointer, plus the bytes" — decode_tensor() in
+// tensor_codec.h hands back a view referencing the buffer in place, no
+// copy, matching FlatBuffers' whole reason for existing here over
+// protobuf (step 6's control plane, which chose protobuf precisely
+// because messages there are small and infrequent — see
+// networking/DESIGN.md).
+
+namespace runtime.fbs;
+
+enum DType : byte { F32, F16, BF16, F8E4M3, F8E5M2, INT8, INT4 }
+enum Device : byte { CPU, GPU, FPGA, TPU }
+
+table TensorDescriptor {
+  shape: [int64];
+  strides: [int64];
+  dtype: DType;
+  device: Device;
+  data: [ubyte]; // row-major per `strides`, exactly product(shape)*dtype_size bytes
+}
+
+root_type TensorDescriptor;

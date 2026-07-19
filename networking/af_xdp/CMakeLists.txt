@@ -1,1 +1,12 @@
-# af_xdp — stub, requires Linux
+# Step 8: AF_XDP kernel bypass — Linux + libbpf (xsk.h) only.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_library(BPF_LIB bpf)
+  find_path(XSK_HEADER bpf/xsk.h)
+  if(BPF_LIB AND XSK_HEADER)
+    add_library(AfXdpSocket af_xdp_socket.cpp)
+    target_link_libraries(AfXdpSocket PUBLIC ${BPF_LIB})
+    target_include_directories(AfXdpSocket PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  else()
+    message(STATUS "af_xdp: libbpf/xsk.h not found — skipped")
+  endif()
+endif()

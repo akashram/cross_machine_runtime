@@ -1,1 +1,10 @@
-# rdma_onesided — stub, requires Linux
+# Step 3: RDMA one-sided operations — Linux + libfabric + EFA only.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_library(LIBFABRIC_LIB fabric)
+  if(LIBFABRIC_LIB)
+    add_library(RdmaOnesided rdma_onesided.cpp)
+    target_link_libraries(RdmaOnesided PUBLIC ${LIBFABRIC_LIB})
+  else()
+    message(STATUS "rdma_onesided: libfabric not found — skipped")
+  endif()
+endif()

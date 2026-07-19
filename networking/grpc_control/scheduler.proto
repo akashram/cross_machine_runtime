@@ -1,7 +1,12 @@
 syntax = "proto3";
 package runtime;
 
-// TODO: implement on Linux with gRPC
+// Control-plane RPC for the cross-machine runtime: node registration
+// (a worker announces itself and its devices), health checks (the
+// scheduler's liveness view of the cluster), and task dispatch (send a
+// compiled runtime.module — the `ir` bytes are AotCompiler's output from
+// Phase 4 — with its per-op placement already decided, and wait for the
+// result). See scheduler_service.cpp for the implementation.
 
 service Scheduler {
   rpc RegisterNode(NodeInfo) returns (NodeId);
