@@ -24,11 +24,17 @@ else()
   message(STATUS "CUDA not found — gpu_engine skipped")
 endif()
 
-# Phase 4: Compiler/IR (MLIR) — requires MLIR_DIR to be set
+# Phase 4: Compiler/IR (MLIR). cost_model has no MLIR dependency (pure
+# C++ roofline arithmetic — see compiler/cost_model/README.md), so it
+# builds and is testable everywhere, including this Mac. It must be added
+# before the MLIR-gated compiler/ subdirectory below since PlacementPass
+# and ShardingPass link against the CostModel target.
+add_subdirectory(compiler/cost_model)
+
 if(DEFINED MLIR_DIR)
   add_subdirectory(compiler)
 else()
-  message(STATUS "MLIR_DIR not set — compiler/ stub only (skipped)")
+  message(STATUS "MLIR_DIR not set — compiler/ (except cost_model) stub only (skipped)")
 endif()
 
 # Phases 5-10, 12: stubs — each CMakeLists.txt guards itself on missing deps

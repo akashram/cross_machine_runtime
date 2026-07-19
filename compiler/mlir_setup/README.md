@@ -1,6 +1,16 @@
 # MLIR Build Setup
 
-**Status: STUB — requires Linux x86. Any AWS instance (c5.2xlarge recommended).**
+**Status: script complete, not yet run — requires Linux x86. Any AWS instance (c5.2xlarge recommended).**
+
+## Design
+`build_llvm.sh` configures LLVM/MLIR+Clang out-of-tree with Ninja,
+`-DLLVM_ENABLE_PROJECTS="mlir;clang"` (Clang is needed for the fuzzing
+step's `-fsanitize=fuzzer` support, not just MLIR itself),
+`-DLLVM_TARGETS_TO_BUILD="X86;NVPTX"` (X86 for the host, NVPTX so a future
+GPU-targeting lowering path — out of scope for Phase 4 itself, which
+dispatches to `gpu_engine/`'s existing CUDA kernels via `kernel_call` — has
+the backend available if ever needed), and runs `check-mlir` so a broken
+build fails at setup time rather than silently at the first real use.
 
 ## What this measures
 Validates that LLVM/MLIR builds correctly from source, MLIR CMake integration

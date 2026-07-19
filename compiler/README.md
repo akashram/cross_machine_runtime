@@ -1,12 +1,15 @@
 # Phase 4: Compiler / IR (MLIR)
 
-**Status: STUB — requires LLVM/MLIR built from source on Linux.**
+**Status: code-complete (15/15 steps), not yet built — requires LLVM/MLIR
+built from source on Linux. Exception: `cost_model/` has no MLIR
+dependency and has already been built and run — see its README.**
 
 ## Overview
 MLIR-based compiler pipeline for the cross-machine runtime. Defines a custom
 dialect with ops for matmul/conv/elementwise/reduce with device placement
 annotations, then runs a series of passes to optimize and lower to
-device-specific code.
+device-specific code. See `DESIGN.md` for the non-obvious decisions behind
+the dialect and pass design.
 
 ## Build instructions
 
@@ -47,3 +50,7 @@ cmake --build build/compiler
 - Required: Linux x86 (any AWS instance) for MLIR build
 - LLVM build takes ~1 hour and ~30GB disk
 - GPU backend lowering validation requires CUDA instance
+- Exception: `cost_model/` builds and runs anywhere right now —
+  `cmake -B build .` from the repo root picks it up unconditionally, no
+  `MLIR_DIR` needed. Confirmed working via `clang++ -std=c++20` directly,
+  see `cost_model/README.md`.

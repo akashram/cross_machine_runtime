@@ -27,6 +27,7 @@ add_subdirectory(placement)        # Step 9: device placement pass
 add_subdirectory(sharding)         # Step 10: auto-sharding pass
 add_subdirectory(kernel_spec)      # Step 11: kernel specialization
 add_subdirectory(aot)              # Step 12: AOT compilation pipeline
-add_subdirectory(cost_model)       # Step 13: device cost model
+# Step 13 (cost_model) is added unconditionally by the root CMakeLists.txt
+# — it has no MLIR dependency and builds without this MLIR_DIR gate.
 add_subdirectory(fuzzing)          # Step 14: libFuzzer for IR parser
 add_subdirectory(upstream)         # Step 15: LLVM upstream tracking
