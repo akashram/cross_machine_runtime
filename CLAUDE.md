@@ -14,27 +14,53 @@ All CPU affinity, hugepages, OS tuning, SIMD, branchless, AVX-512, tiling,
 inference engine, roofline, perf counters, PGO, and busy-poll steps done.
 Lives in `cpu_engine/`.
 
-**Phase 3: GPU Backend — IN PROGRESS (5/24 steps done)**
-Steps 1–5 implemented (CMake scaffold, GPU memory, streams, warp primitives,
-shared memory). Steps 6–24 are stubs: directory + interface + README with
-measurement TODOs. Lives in `gpu_engine/`.
+**Phase 3: GPU Backend — CODE COMPLETE (24/24 steps, 2026-07-19)**
+All steps implemented with real CUDA code: memory management, streams, warp
+and shared-memory primitives, coalescing, occupancy, elementwise/GEMM kernels,
+PTX/SASS inspection, flash attention, CUDA graphs, P2P, mixed precision, FP8,
+tensor core alignment, Hopper TMA/WGMMA, 2:4 sparsity, roofline, MPS, NVML
+power monitoring, Nsight CI. Lives in `gpu_engine/`. None of it has run on a
+GPU yet — no CUDA toolchain on Mac. All README.md result tables are still
+`TODO: run on [hardware]`. Hardware validation is deferred (see below).
 
-**Phases 4–10, 12 — STUBBED (2026-06-20)**
-All remaining phases have stub directories, interface headers, CMakeLists.txt,
-and README.md files with design outlines. Nothing has been run on hardware yet.
-Full cloud hardware validation is the next major milestone after stubbing.
+**Phase 4: Compiler/IR (MLIR) — CODE COMPLETE (15/15 steps, 2026-07-19)**
+Runtime dialect (15 ops, 3 attrs, TableGen-based) plus all nine passes:
+shape inference, fusion, affine lowering/tiling, memory planning, remat,
+placement, auto-sharding, kernel specialization, and the AOT pipeline that
+orchestrates all of them + LLVM codegen + link. Lives in `compiler/`. None
+of it has run — no MLIR/LLVM toolchain on Mac — except `cost_model/`,
+which has no MLIR dependency, compiles with plain `clang++`, and has
+actually been run locally (see `compiler/cost_model/README.md` for
+captured output). See `compiler/DESIGN.md` for the design rationale.
+
+**Phases 5, 6, 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
+Stub directories, interface headers, CMakeLists.txt, and README.md design
+outlines exist. Code bodies are still 1–3 line TODOs. Next up, in PLAN.md
+order: Phase 5 (Distributed Layer + Networking).
 
 ---
 
-## Execution strategy (updated 2026-06-20)
+## Execution strategy (updated 2026-07-19)
 
-**Stub-first, then validate on cloud hardware.**
+**Write every phase's real code on the Mac (or any hardware-free tooling)
+before spending a dollar on cloud hardware. No cloud instance gets
+provisioned until every phase below is code-complete.**
 
-All phase directories, API headers, benchmark skeletons, and README outlines
-exist in the repo. The code compiles (or is gated behind hardware checks).
-Real benchmark numbers are TODO throughout stubs.
+This reverses the earlier "stub first, fill in on hardware" approach: stubs
+turned out too bare to be useful as a plan (a few lines of declarations per
+component), so the actual algorithms get written now, locally, and cloud
+hardware is used purely for benchmarking/tuning what already works on paper.
 
-**When cloud hardware is available, work through stubs in phase order:**
+**Local implementation order: PLAN.md phase order (1 → 2 → 3 → 4 → 5 → 6 → 7
+→ 8 → 9 → 10 → 12).** Phases 1–3 are done (Phase 3 is code-complete, not yet
+hardware-validated). Next is Phase 4, then 5, 6, 7, 8, 9, 10, 12 in sequence.
+Within each phase, implement step by step in PLAN.md's build order. A step
+counts as implemented when it has real logic (not a stub) and compiles
+wherever it can without the target hardware; benchmark numbers stay TODO
+until the hardware validation pass.
+
+**Hardware validation pass (after all phases above are code-complete):**
+Work through phases in the same order, one hardware type at a time.
 
 ### Hardware needed per phase
 | Phase | Hardware | AWS instance |
@@ -51,9 +77,9 @@ Real benchmark numbers are TODO throughout stubs.
 
 ### When returning to a phase on cloud hardware
 1. SSH into the appropriate instance.
-2. `git pull origin/main` to get all stubs.
+2. `git pull origin/main` to get the full implementation.
 3. Build with the appropriate CMake preset for that platform.
-4. Work through stub directories in PLAN.md order within that phase.
+4. Run and tune each step in PLAN.md order within that phase.
 5. Fill in README.md results tables with real numbers.
 6. Commit and push after each step.
 

@@ -6,6 +6,21 @@
 - Observability (benchmarking harness, sanitizers, perf counters) is set up in Phase 1 and applied to every subsequent phase — not added at the end.
 - "Done" means: benchmarks with confidence intervals, design doc explaining WHY each decision was made, comparison against the alternative you didn't choose, hardware counter analysis where applicable, and code that passes ASan/TSan/UBSan.
 
+## Execution order (updated 2026-07-19)
+
+**Write all code for every phase before spending a dollar on cloud hardware.**
+Phases below run in this same numbering order (1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+→ 9 → 10 → 12) for both implementation and hardware validation — there is no
+separate reordering for the code-writing pass. A phase is "code-complete"
+once every step in its build order has real logic (not a stub) and compiles
+wherever it can without the target hardware; benchmark numbers stay TODO
+until that phase's hardware validation pass.
+
+Only after every phase below is code-complete does cloud hardware get
+provisioned, one phase at a time, in the same order, to run and tune what
+was already written. See CLAUDE.md for current phase status and the
+hardware-per-phase table.
+
 ---
 
 ## Phase 1: Foundation

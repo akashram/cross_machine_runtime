@@ -1,5 +1,11 @@
 # Cross-Machine Runtime — Full Project Scope
 
+> This document lists full feature scope by area, not build order. See
+> PLAN.md's "Execution order" section: all phases get fully implemented in
+> PLAN.md's phase order before any cloud hardware is provisioned; hardware is
+> then used for a validation/tuning pass, in the same order, once every
+> phase is code-complete.
+
 ## Core Runtime
 - Lock-free task scheduler with work-stealing (Cilk-style, Chase-Lev deque)
 - C++20 coroutine-based async execution engine
