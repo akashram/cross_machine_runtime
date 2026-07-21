@@ -56,10 +56,18 @@ remaining 13 steps are real, complete code gated behind Linux-only kernel
 APIs, a specific NIC, external libraries, GPU hardware, or a Java
 toolchain for TLC — see `networking/README.md`'s status table.
 
-**Phases 6, 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
+**Phase 6: Distributed GPU Training — IN PROGRESS (1/25 steps, started 2026-07-21)**
+Step 1 (distributed data loading) is code-complete and locally run: a
+WebDataset-style tar codec, shard-granularity rank sharding, and a
+multi-worker prefetch queue, all portable (no CUDA/Linux dependency) —
+built and tested on this Mac (`ctest -R data_loader_test`, real captured
+numbers in `distributed_training/data_loading/README.md`). Remaining 24
+steps are still stubs. Next: step 2 (GPUDirect Storage).
+
+**Phases 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
-outlines exist. Code bodies are still 1–3 line TODOs. Next up, in PLAN.md
-order: Phase 6 (Distributed GPU Training).
+outlines exist. Code bodies are still 1–3 line TODOs. Next up after Phase 6,
+in PLAN.md order: Phase 7 (FPGA Backend).
 
 ---
 
