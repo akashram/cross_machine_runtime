@@ -70,4 +70,49 @@ inline void sgd_step(const std::vector<Tensor> &params, float lr) {
   for (auto &p : params) p.mutable_value().add_inplace(p.grad(), -lr);
 }
 
+// Flatten/unflatten a parameter list to/from one contiguous vector<float>.
+// Steps 7+ (ZeRO, tensor/pipeline/3D parallelism, checkpointing) shard,
+// communicate, and reassemble parameters and gradients as flat float
+// buffers (matching networking/ring_allreduce's and collectives'
+// `float*`-based interface), not as a list of differently-shaped Tensors
+// — these are the glue between the two.
+inline std::vector<float> flatten_params(const std::vector<Tensor> &params) {
+  std::vector<float> flat;
+  for (const auto &p : params) {
+    const Matrix &m = p.value();
+    for (int r = 0; r < m.rows(); ++r)
+      for (int c = 0; c < m.cols(); ++c) flat.push_back(m(r, c));
+  }
+  return flat;
+}
+
+inline std::vector<float> flatten_grads(const std::vector<Tensor> &params) {
+  std::vector<float> flat;
+  for (const auto &p : params) {
+    const Matrix &g = p.grad();
+    for (int r = 0; r < g.rows(); ++r)
+      for (int c = 0; c < g.cols(); ++c) flat.push_back(g(r, c));
+  }
+  return flat;
+}
+
+// Copies a flat buffer (as produced by flatten_params) back into the
+// parameters' value Matrices. `flat` may be longer than needed (e.g.
+// padded to a multiple of world_size for uniform sharding) — only the
+// first total_param_count(params) entries are read.
+inline void unflatten_params(const std::vector<Tensor> &params, const std::vector<float> &flat) {
+  size_t idx = 0;
+  for (const auto &p : params) {
+    Matrix &m = p.mutable_value();
+    for (int r = 0; r < m.rows(); ++r)
+      for (int c = 0; c < m.cols(); ++c) m(r, c) = flat[idx++];
+  }
+}
+
+inline size_t total_param_count(const std::vector<Tensor> &params) {
+  size_t n = 0;
+  for (const auto &p : params) n += p.value().size();
+  return n;
+}
+
 } // namespace distributed_training
