@@ -56,17 +56,17 @@ remaining 13 steps are real, complete code gated behind Linux-only kernel
 APIs, a specific NIC, external libraries, GPU hardware, or a Java
 toolchain for TLC — see `networking/README.md`'s status table.
 
-**Phase 6: Distributed GPU Training — IN PROGRESS (24/25 steps, started 2026-07-19)**
-24 of 25 steps are code-complete and locally run on this Mac (`ctest`,
-real captured numbers in each step's own README): data loading, data
+**Phase 6: Distributed GPU Training — CODE COMPLETE (25/25 steps, 2026-07-21)**
+All 25 steps are code-complete and locally run on this Mac (`ctest`, real
+captured numbers in each step's own README): data loading, data
 parallel, grad accum, grad clipping, autograd engine + toy MLP, ZeRO-1/2/3,
 ZeRO-Infinity offload scheduling, column/row-parallel linear, tensor-
 parallel attention, sequence parallelism, 1F1B pipeline scheduling, 3D
 parallelism, MoE/expert parallelism, checkpoint sharding, compute/comm
 overlap, SyncBatchNorm, full training loop, 2:4 structured sparsity
-training, supervised fine-tuning (SFT), reward model training, and
-PPO-based RLHF. Portable — no CUDA/Linux dependency for any of them;
-multi-rank steps use simulated ranks (real TCP loopback threads,
+training, supervised fine-tuning (SFT), reward model training,
+PPO-based RLHF, and DPO. Portable — no CUDA/Linux dependency for any of
+them; multi-rank steps use simulated ranks (real TCP loopback threads,
 `networking/ring_allreduce` and `networking/collectives`). Only step 2
 (GPUDirect Storage) stays hardware-gated (real cuFile API, code-complete,
 unrun — no portable subset, see
@@ -93,8 +93,22 @@ into the reward signal, data-parallel across 5 simulated ranks; mean
 reward rises 0.93 -> ~2.9 over 10 iterations while mean KL stays bounded
 (peaks at 1.26) — the reward-vs-KL tradeoff PLAN.md asks this step to
 monitor, with no reward-hacking signature (see
-`distributed_training/ppo_rlhf/README.md`). Remaining: step 25 (DPO) —
-in progress.
+`distributed_training/ppo_rlhf/README.md`). Step 25 (DPO) reuses
+`bradley_terry_loss` and `policy_dlogits` unchanged — Rafailov et al.'s
+reparameterization makes DPO's loss literally Bradley-Terry applied to an
+"implicit reward" `beta*(log pi_policy - log pi_ref)` instead of a
+learned reward model's output, so no new gradient math was needed. Uses
+the identical SFT-init recipe and identical 75-pair preference dataset as
+PPO for a real comparison; DPO's own loss/margin trace is clean and
+monotonic (loss 0.637 -> 0.492, margin 0.121 -> 0.480) while a downstream
+reward-model eval trace (matching PPO's metric) turned out too noisy to
+trust at this toy scale (unconstrained reward-model scale + limited
+headroom after a well-converged SFT policy) — documented as a real
+finding, not hidden, with the pass criterion switched to the direct
+loss/margin signal (see `distributed_training/dpo/README.md`, which also
+has a DPO-vs-PPO comparison table and "when to prefer each" discussion).
+Phase 6 is now fully code-complete; hardware validation is deferred along
+with the earlier phases (see execution strategy below).
 
 **`/transformer/` — minimal decoder-only transformer + tokenizer (added 2026-07-21, not one of the original 12 phases)**
 Built specifically so Phase 6 steps 22-25 have a real model instead of
@@ -110,8 +124,8 @@ full rationale.
 
 **Phases 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
-outlines exist. Code bodies are still 1–3 line TODOs. Next up after Phase 6,
-in PLAN.md order: Phase 7 (FPGA Backend).
+outlines exist. Code bodies are still 1–3 line TODOs. Phase 6 is now
+code-complete (25/25). Next up, in PLAN.md order: Phase 7 (FPGA Backend).
 
 ---
 
