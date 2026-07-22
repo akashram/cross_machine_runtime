@@ -56,21 +56,27 @@ remaining 13 steps are real, complete code gated behind Linux-only kernel
 APIs, a specific NIC, external libraries, GPU hardware, or a Java
 toolchain for TLC — see `networking/README.md`'s status table.
 
-**Phase 6: Distributed GPU Training — IN PROGRESS (21/25 steps, started 2026-07-19)**
-21 of 25 steps are code-complete and locally run on this Mac (`ctest`,
+**Phase 6: Distributed GPU Training — IN PROGRESS (22/25 steps, started 2026-07-19)**
+22 of 25 steps are code-complete and locally run on this Mac (`ctest`,
 real captured numbers in each step's own README): data loading, data
 parallel, grad accum, grad clipping, autograd engine + toy MLP, ZeRO-1/2/3,
 ZeRO-Infinity offload scheduling, column/row-parallel linear, tensor-
 parallel attention, sequence parallelism, 1F1B pipeline scheduling, 3D
 parallelism, MoE/expert parallelism, checkpoint sharding, compute/comm
-overlap, SyncBatchNorm, full training loop, and 2:4 structured sparsity
-training. Portable — no CUDA/Linux dependency for any of them; multi-rank
-steps use simulated ranks (real TCP loopback threads,
-`networking/ring_allreduce` and `networking/collectives`). Only step 2
-(GPUDirect Storage) stays hardware-gated (real cuFile API, code-complete,
-unrun — no portable subset, see `distributed_training/gpudirect_storage/README.md`).
-Remaining: steps 22-25 (SFT, reward model, PPO, DPO) — in progress, now
-that `/transformer/` (see below) gives them a real model to train.
+overlap, SyncBatchNorm, full training loop, 2:4 structured sparsity
+training, and supervised fine-tuning (SFT). Portable — no CUDA/Linux
+dependency for any of them; multi-rank steps use simulated ranks (real TCP
+loopback threads, `networking/ring_allreduce` and `networking/collectives`).
+Only step 2 (GPUDirect Storage) stays hardware-gated (real cuFile API,
+code-complete, unrun — no portable subset, see
+`distributed_training/gpudirect_storage/README.md`). Step 22 (SFT) trains
+the real `/transformer/` model on a toy instruction-tuning task (masked
+next-token loss, 5 simulated data-parallel ranks), perplexity 18.3 -> 1.07
+(see `distributed_training/sft/README.md`); it also added
+`flatten_grad`/`unflatten_into_grad`/`accumulate_grad` to
+`transformer/transformer_model.h` so `ModelGrads` can be all-reduced,
+which steps 23-25 (reward model, PPO, DPO) will reuse. Remaining: steps
+23-25 (reward model, PPO, DPO) — in progress.
 
 **`/transformer/` — minimal decoder-only transformer + tokenizer (added 2026-07-21, not one of the original 12 phases)**
 Built specifically so Phase 6 steps 22-25 have a real model instead of

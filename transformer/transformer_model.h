@@ -356,6 +356,74 @@ inline Matrix log_probs(const Matrix &logits) {
   return out;
 }
 
+// Flattens every matrix in a ModelGrads into one contiguous buffer, in a
+// fixed order — the glue distributed_training/'s RLHF steps (22-25) need
+// to all-reduce a whole model's gradient across simulated ranks (matching
+// distributed_training/autograd/mlp.h's flatten_params/flatten_grads for
+// the simpler toy MLP) and to sum per-example gradients into a mini-batch
+// gradient (matching grad_accum/'s pattern) without hand-writing
+// element-by-element accumulation over this struct's nested shape.
+inline void append_flat(std::vector<float> &out, const Matrix &m) {
+  for (int i = 0; i < m.rows(); ++i)
+    for (int j = 0; j < m.cols(); ++j) out.push_back(m(i, j));
+}
+
+inline std::vector<float> flatten_grad(const ModelGrads &g) {
+  std::vector<float> flat;
+  append_flat(flat, g.token_emb);
+  append_flat(flat, g.pos_emb);
+  for (const auto &b : g.blocks) {
+    append_flat(flat, b.gamma1); append_flat(flat, b.beta1);
+    append_flat(flat, b.wq); append_flat(flat, b.wk); append_flat(flat, b.wv); append_flat(flat, b.wo);
+    append_flat(flat, b.gamma2); append_flat(flat, b.beta2);
+    append_flat(flat, b.w1); append_flat(flat, b.b1); append_flat(flat, b.w2); append_flat(flat, b.b2);
+  }
+  append_flat(flat, g.final_gamma);
+  append_flat(flat, g.final_beta);
+  append_flat(flat, g.w_out);
+  return flat;
+}
+
+inline void read_flat(Matrix &m, const std::vector<float> &flat, size_t &idx) {
+  for (int i = 0; i < m.rows(); ++i)
+    for (int j = 0; j < m.cols(); ++j) m(i, j) = flat[idx++];
+}
+
+// Overwrites every matrix in `g` from `flat` (same fixed order as
+// flatten_grad), for reassembling a gradient after an all-reduce.
+inline void unflatten_into_grad(ModelGrads &g, const std::vector<float> &flat) {
+  size_t idx = 0;
+  read_flat(g.token_emb, flat, idx);
+  read_flat(g.pos_emb, flat, idx);
+  for (auto &b : g.blocks) {
+    read_flat(b.gamma1, flat, idx); read_flat(b.beta1, flat, idx);
+    read_flat(b.wq, flat, idx); read_flat(b.wk, flat, idx); read_flat(b.wv, flat, idx); read_flat(b.wo, flat, idx);
+    read_flat(b.gamma2, flat, idx); read_flat(b.beta2, flat, idx);
+    read_flat(b.w1, flat, idx); read_flat(b.b1, flat, idx); read_flat(b.w2, flat, idx); read_flat(b.b2, flat, idx);
+  }
+  read_flat(g.final_gamma, flat, idx);
+  read_flat(g.final_beta, flat, idx);
+  read_flat(g.w_out, flat, idx);
+}
+
+// Adds b's every matrix into a's (elementwise, in place) — accumulating a
+// mini-batch gradient across several examples' backward() calls.
+inline void accumulate_grad(ModelGrads &a, const ModelGrads &b) {
+  a.token_emb.add_inplace(b.token_emb);
+  a.pos_emb.add_inplace(b.pos_emb);
+  for (size_t l = 0; l < a.blocks.size(); ++l) {
+    auto &ab = a.blocks[l];
+    const auto &bb = b.blocks[l];
+    ab.gamma1.add_inplace(bb.gamma1); ab.beta1.add_inplace(bb.beta1);
+    ab.wq.add_inplace(bb.wq); ab.wk.add_inplace(bb.wk); ab.wv.add_inplace(bb.wv); ab.wo.add_inplace(bb.wo);
+    ab.gamma2.add_inplace(bb.gamma2); ab.beta2.add_inplace(bb.beta2);
+    ab.w1.add_inplace(bb.w1); ab.b1.add_inplace(bb.b1); ab.w2.add_inplace(bb.w2); ab.b2.add_inplace(bb.b2);
+  }
+  a.final_gamma.add_inplace(b.final_gamma);
+  a.final_beta.add_inplace(b.final_beta);
+  a.w_out.add_inplace(b.w_out);
+}
+
 inline void sgd_step(ModelParams &p, const ModelGrads &g, float lr) {
   p.token_emb.add_inplace(g.token_emb, -lr);
   p.pos_emb.add_inplace(g.pos_emb, -lr);
