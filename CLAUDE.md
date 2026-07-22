@@ -56,13 +56,33 @@ remaining 13 steps are real, complete code gated behind Linux-only kernel
 APIs, a specific NIC, external libraries, GPU hardware, or a Java
 toolchain for TLC — see `networking/README.md`'s status table.
 
-**Phase 6: Distributed GPU Training — IN PROGRESS (1/25 steps, started 2026-07-21)**
-Step 1 (distributed data loading) is code-complete and locally run: a
-WebDataset-style tar codec, shard-granularity rank sharding, and a
-multi-worker prefetch queue, all portable (no CUDA/Linux dependency) —
-built and tested on this Mac (`ctest -R data_loader_test`, real captured
-numbers in `distributed_training/data_loading/README.md`). Remaining 24
-steps are still stubs. Next: step 2 (GPUDirect Storage).
+**Phase 6: Distributed GPU Training — IN PROGRESS (21/25 steps, started 2026-07-19)**
+21 of 25 steps are code-complete and locally run on this Mac (`ctest`,
+real captured numbers in each step's own README): data loading, data
+parallel, grad accum, grad clipping, autograd engine + toy MLP, ZeRO-1/2/3,
+ZeRO-Infinity offload scheduling, column/row-parallel linear, tensor-
+parallel attention, sequence parallelism, 1F1B pipeline scheduling, 3D
+parallelism, MoE/expert parallelism, checkpoint sharding, compute/comm
+overlap, SyncBatchNorm, full training loop, and 2:4 structured sparsity
+training. Portable — no CUDA/Linux dependency for any of them; multi-rank
+steps use simulated ranks (real TCP loopback threads,
+`networking/ring_allreduce` and `networking/collectives`). Only step 2
+(GPUDirect Storage) stays hardware-gated (real cuFile API, code-complete,
+unrun — no portable subset, see `distributed_training/gpudirect_storage/README.md`).
+Remaining: steps 22-25 (SFT, reward model, PPO, DPO) — in progress, now
+that `/transformer/` (see below) gives them a real model to train.
+
+**`/transformer/` — minimal decoder-only transformer + tokenizer (added 2026-07-21, not one of the original 12 phases)**
+Built specifically so Phase 6 steps 22-25 have a real model instead of
+being stubbed or reduced to a toy classifier: real causal multi-head
+attention (reuses `distributed_training/tensor_parallel_attn`), real
+LayerNorm (reuses `distributed_training/seq_parallel`), real hand-derived
+backprop through the whole stack, gradient-checked, and validated by an
+actual training run that greedy-generates its training corpus back
+exactly (`ctest -R transformer_test`). Character-level tokenizer, no
+batching — see `transformer/README.md` for the stated scope. See
+PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
+full rationale.
 
 **Phases 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design

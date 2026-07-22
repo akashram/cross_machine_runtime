@@ -39,6 +39,12 @@ endif()
 
 # Phases 5-10, 12: stubs — each CMakeLists.txt guards itself on missing deps
 add_subdirectory(networking)
+
+# Minimal decoder-only transformer + tokenizer — not one of PLAN.md's
+# original 12 phases; added to give distributed_training/'s RLHF steps
+# (22-25) a real model. See transformer/README.md.
+add_subdirectory(transformer)
+
 add_subdirectory(distributed_training)
 add_subdirectory(fpga_engine)
 add_subdirectory(tpu_engine)

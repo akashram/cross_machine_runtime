@@ -271,6 +271,24 @@ All-reduce within 10% of NCCL throughput. PTP synchronization < 1µs across node
 - InstructGPT (Ouyang et al. 2022): how RLHF with PPO aligns a pretrained LLM — read before implementing steps 22–24
 - DPO (Rafailov et al. 2023): Direct Preference Optimization as a simpler PPO alternative — understand the reparameterization that eliminates the reward model
 
+### Minimal Transformer (added 2026-07-21, not in the original 12-phase scope)
+Steps 22–25 (SFT, reward model, PPO, DPO) need an actual model to train,
+and nothing earlier in this plan builds one — Phase 9 (Inference Serving)
+assumes an existing transformer to serve, it does not build one either.
+`/transformer/` fills that gap: a minimal decoder-only transformer (token
++ positional embedding, N pre-LN blocks with causal multi-head
+self-attention and an MLP, final LayerNorm, output projection) plus a
+character-level tokenizer, both real and complete — real causal masking,
+real backprop through the whole stack (hand-derived at the Matrix level,
+reusing `tensor_parallel_attn`'s attention primitive and
+`seq_parallel`'s LayerNorm), gradient-checked, and validated by an actual
+training run that greedy-generates its training corpus back exactly. No
+BPE tokenizer pipeline (character-level only) and no batching (one
+sequence per forward call) — stated scope choices, see
+`transformer/README.md`. This is a standalone component, not scoped to
+steps 22–25 alone — Phase 9 (`inference_serving/`) can use it too if that
+phase is ever implemented.
+
 ### Build order
 1. **Distributed data loading** — WebDataset format, multi-worker DataLoader, dataset sharding across ranks, prefetch queue, measure GPU utilization with and without pipeline. Target: data loading never the bottleneck.
 2. **GPUDirect Storage** — direct NVMe → GPU checkpoint loading, measure load time vs. CPU-staged loading
