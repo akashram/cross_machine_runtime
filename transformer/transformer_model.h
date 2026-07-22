@@ -390,9 +390,12 @@ inline void read_flat(Matrix &m, const std::vector<float> &flat, size_t &idx) {
 }
 
 // Overwrites every matrix in `g` from `flat` (same fixed order as
-// flatten_grad), for reassembling a gradient after an all-reduce.
-inline void unflatten_into_grad(ModelGrads &g, const std::vector<float> &flat) {
-  size_t idx = 0;
+// flatten_grad) starting at `idx`, advancing it — the idx-threading
+// overload lets a caller with EXTRA params beyond ModelGrads (e.g.
+// reward_model's scalar reward head) append them to the same flat buffer
+// and continue reading right after the body, instead of needing a second
+// all-reduce round trip.
+inline void unflatten_into_grad(ModelGrads &g, const std::vector<float> &flat, size_t &idx) {
   read_flat(g.token_emb, flat, idx);
   read_flat(g.pos_emb, flat, idx);
   for (auto &b : g.blocks) {
@@ -404,6 +407,11 @@ inline void unflatten_into_grad(ModelGrads &g, const std::vector<float> &flat) {
   read_flat(g.final_gamma, flat, idx);
   read_flat(g.final_beta, flat, idx);
   read_flat(g.w_out, flat, idx);
+}
+
+inline void unflatten_into_grad(ModelGrads &g, const std::vector<float> &flat) {
+  size_t idx = 0;
+  unflatten_into_grad(g, flat, idx);
 }
 
 // Adds b's every matrix into a's (elementwise, in place) — accumulating a
