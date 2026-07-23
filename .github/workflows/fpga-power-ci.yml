@@ -1,0 +1,53 @@
+name: FPGA Power CI
+
+# Manually triggered only (workflow_dispatch) rather than on push/PR like
+# ci.yml: this job needs a self-hosted runner physically attached to an F1
+# instance (label "f1"), which doesn't exist yet per CLAUDE.md's execution
+# strategy — no cloud hardware is provisioned until every phase is
+# code-complete. Wiring this to push/pull_request now would just queue
+# forever waiting for a runner that isn't there. Flip the trigger to
+# `on: [push, pull_request]` once an F1 self-hosted runner is registered.
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_dir:
+        description: "fpga_engine/ subdirectory of the kernel to build"
+        required: true
+      top:
+        description: "HLS top-level module name"
+        required: true
+      power_budget_w:
+        description: "fail if total on-chip power exceeds this many watts"
+        required: true
+        default: "10.0"
+
+jobs:
+  power-report:
+    runs-on: [self-hosted, f1]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Source Xilinx tools
+        run: |
+          source /opt/xilinx/xrt/setup.sh
+          source /tools/Xilinx/Vitis/2022.2/settings64.sh
+
+      - name: Build bitstream + power report
+        run: |
+          ./fpga_engine/tcl_pipeline/run_pipeline.sh \
+            "fpga_engine/${{ github.event.inputs.kernel_dir }}" \
+            "${{ github.event.inputs.top }}"
+
+      - name: Parse power report and enforce budget
+        run: |
+          python3 fpga_engine/power_ci/parse_power_report.py \
+            "fpga_engine/${{ github.event.inputs.kernel_dir }}/build_${{ github.event.inputs.top }}/reports/power.rpt" \
+            --budget-w "${{ github.event.inputs.power_budget_w }}"
+
+      - name: Archive power report
+        uses: actions/upload-artifact@v4
+        with:
+          name: power-report-${{ github.event.inputs.top }}
+          path: |
+            fpga_engine/${{ github.event.inputs.kernel_dir }}/build_${{ github.event.inputs.top }}/reports/power.rpt
+            fpga_engine/${{ github.event.inputs.kernel_dir }}/build_${{ github.event.inputs.top }}/reports/power.rpt.json
