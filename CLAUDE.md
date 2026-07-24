@@ -122,10 +122,34 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phases 7, 8, 9, 10, 12 — STUBBED, pending full local implementation**
+**Phase 7: FPGA Backend — IN PROGRESS (18/25 steps, as of 2026-07-23)**
+Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
+Phase 3/4 — every step is code-complete and locally runnable wherever it
+doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
+hardware-only piece written as real (not stub) TCL/HLS/XRT code, unrun,
+clearly marked TODO in each step's README. Done so far: F1 setup
+validation, TCL synth/impl/bitstream pipeline, Vivado power report CI,
+AXI4-Stream passthrough, dot product II study, UNROLL/PIPELINE/DATAFLOW
+comparison, DSP48E2 vs LUT tradeoff, ap_fixed precision/resource/latency
+study, BRAM vs URAM access patterns, multi-bank DDR4 integration,
+host-side DMA via XRT, PCIe latency decomposition, double-buffered
+compute/transfer overlap, a fully pipelined INT8 MLP inference kernel,
+timing closure critical-path analysis + retiming, SLR partitioning +
+crossing penalty, clock gating dynamic-power modeling, and XADC die
+temperature/voltage rail monitoring (step 18: `xadc_sensors.cpp` uses
+XRT's real `get_info<thermal|electrical>()` sensor API, unrun; portable
+`parse_xadc_json.py` parses the JSON and flags out-of-tolerance rails,
+self-test passing locally — see `fpga_engine/xadc/README.md`). Several
+steps followed a "portable model + hardware-gated kernel" split (e.g.
+`clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
+duty cycle locally; `timing_closure/critical_path_model.cpp` and
+`slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
+each step's own README documents which half is measured vs. TODO. Next:
+step 19 (ILA debug session).
+
+**Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
-outlines exist. Code bodies are still 1–3 line TODOs. Phase 6 is now
-code-complete (25/25). Next up, in PLAN.md order: Phase 7 (FPGA Backend).
+outlines exist. Code bodies are still 1–3 line TODOs.
 
 ---
 
