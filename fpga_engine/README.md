@@ -1,6 +1,11 @@
 # Phase 7: FPGA Backend
 
-**Status: STUB — requires AWS F1 instance (Xilinx UltraScale+ VU9P).**
+**Status: CODE COMPLETE (25/25 steps). No AWS F1 instance on Mac, so
+every step is code-complete and locally runnable wherever it doesn't
+strictly need Vivado/Vitis HLS/an FPGA card, with the hardware-only piece
+written as real (not stub) TCL/HLS/XRT code, unrun — see each step's own
+README for which half is measured vs. TODO, and `CLAUDE.md`'s Phase 7
+section for the full per-step summary.**
 
 ## Overview
 HLS kernels, AXI interfaces, DMA orchestration, timing closure, partial

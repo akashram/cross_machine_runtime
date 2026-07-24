@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (24/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — CODE COMPLETE (25/25 steps, 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -215,13 +215,35 @@ bug while writing it: mixing an `int` cycle-count sum directly into a
 `%.0f` printf specifier is undefined behavior in C varargs and silently
 corrupted two printed values; fixed by computing an explicitly-typed
 `int` and using `%d`, confirmed by rebuilding with `-Wall`. See
-`fpga_engine/vitis_ai/README.md`). Several steps followed a "portable
-model + hardware-gated kernel" split (e.g. `clock_gating/
+`fpga_engine/vitis_ai/README.md`), and the thermal-aware router itself
+(step 25: `fpga_engine/thermal_router/` — `thermal_policy.cpp` implements
+`ThermalRouter::allocation_fraction_for_temp()`, the pure temperature ->
+allocation-fraction decision logic (1.0/0.5/0.0 at the warning/throttle/
+shutdown thresholds); `thermal_router.cpp` implements the hardware-
+touching `read_fpga_temp_c()` via the same XRT `get_info<thermal>()` API
+`xadc/xadc_sensors.cpp` uses, hardware-gated and unrun, sharing
+`thermal_policy.cpp` so the real and locally-tested paths can never
+diverge in their decision. `thermal_router_sim.cpp` is the portable half,
+run locally: drives the router against a synthetic FPGA thermal event (a
+first-order RC step response sampled at a 100ms poll interval) and
+measures real response latency with `std::chrono` — 10.8ms at the
+throttle threshold, 31.6ms at shutdown, both within the 100ms
+poll-interval bound as they must be, while the router's own
+decision-compute cost (4.29ns/call) is ~7 orders of magnitude smaller
+than the poll interval, confirming polling cadence — not router logic —
+is the lever for a tighter response-latency budget. This is a real
+measurement of real code actually run, not a hand-computed estimate. See
+`fpga_engine/thermal_router/README.md`. Several steps followed a
+"portable model + hardware-gated kernel" split (e.g. `clock_gating/
 clock_gating_model.cpp` predicts dynamic power reduction vs. duty cycle
 locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
-each step's own README documents which half is measured vs. TODO. Next:
-step 25 (thermal-aware router integration).
+each step's own README documents which half is measured vs. TODO.
+
+Phase 7 is now fully code-complete (25/25); hardware validation is
+deferred along with the earlier phases (see execution strategy below).
+Next local-implementation phase: Phase 8 (TPU Backend), currently
+stubbed.
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
