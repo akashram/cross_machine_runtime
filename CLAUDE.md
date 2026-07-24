@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (23/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (24/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -192,13 +192,36 @@ small one-sided WRITE, a 13.73x modeled speedup dominated by the
 CPU-mediated path's kernel-stack-traversal + interrupt-dispatch +
 context-switch stages the bypass path has no equivalent of — a
 falsifiable claim `rdma_bypass.p4`'s real measurement can be checked
-against once run. See `fpga_engine/fpga_net/README.md`). Several
-steps followed a "portable model + hardware-gated kernel" split (e.g.
-`clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
-duty cycle locally; `timing_closure/critical_path_model.cpp` and
+against once run. See `fpga_engine/fpga_net/README.md`), and a Vitis AI
+DPU-vs-custom-kernel evaluation (step 24: `fpga_engine/vitis_ai/` —
+`mlp_model.py` defines the same 16->32(ReLU)->8 MLP `ml_kernel/
+ml_kernel.cpp` implements by hand, in PyTorch (Vitis AI's quantizer only
+accepts framework models); `vai_compile_flow.sh` is the real
+`vai_q_pytorch` calibration/deploy + `vai_c_xir` compile sequence that
+would produce a DPU-deployable `.xmodel`. Both toolchain/hardware-gated
+and unrun — no Vitis AI Docker image, DPU overlay, or F1 instance
+locally. `dpu_vs_custom_model.cpp` is the portable half, run locally:
+predicts the custom kernel at 163.3ns/inference (49 cycles at the 300MHz
+`timing_closure/critical_path_model.cpp` already showed this exact
+kernel's tree-retimed reduction closes) vs. a representative small
+("B512"-class) DPU at 3506.7ns, a 21.5x modeled speedup dominated
+(99.8%) by the DPU's fixed per-inference dispatch+weight-DMA overhead,
+not compute — the same "shared engine pays fixed overhead a point-design
+skips" argument step 23's networking model makes, and the
+resource-footprint case (DPU's ~500 DSP/~50k LUT footprint is
+workload-size-independent vs. the custom kernel's <=48 DSP and zero
+BRAM/URAM) is the justification PLAN.md step 24 asks for. Caught a real
+bug while writing it: mixing an `int` cycle-count sum directly into a
+`%.0f` printf specifier is undefined behavior in C varargs and silently
+corrupted two printed values; fixed by computing an explicitly-typed
+`int` and using `%d`, confirmed by rebuilding with `-Wall`. See
+`fpga_engine/vitis_ai/README.md`). Several steps followed a "portable
+model + hardware-gated kernel" split (e.g. `clock_gating/
+clock_gating_model.cpp` predicts dynamic power reduction vs. duty cycle
+locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 24 (Vitis AI evaluation).
+step 25 (thermal-aware router integration).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
