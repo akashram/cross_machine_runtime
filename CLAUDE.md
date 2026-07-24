@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (22/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (23/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -177,14 +177,28 @@ timing measurement. Both hardware-gated and unrun. `reconfig_time_model.cpp`
 predicts hot-swap latency from partial-bitstream size — portable, run
 locally: predicts 6.25ms for a small single-kernel RM at a modeled 400
 MB/s ICAP bandwidth, for `pr_host_driver.cpp`'s real measurement to be
-checked against once run. See `fpga_engine/partial_reconfig/README.md`).
-Several
+checked against once run. See `fpga_engine/partial_reconfig/README.md`),
+and an RDMA-like FPGA-direct network path (step 23:
+`fpga_engine/fpga_net/` — `rdma_bypass.p4` is a real P4_16 pipeline for
+an OpenNIC-shell-style P4-programmable NIC: parses Ethernet/IPv4/UDP plus
+a lightweight RDMA-style header and, on a WRITE opcode, dispatches
+straight to a DMA-engine action in the same pipeline pass, no path that
+hands the packet to host software before the payload lands;
+`onic_shell_integration.tcl` wires the compiled pipeline into the
+shell's user-plugin box. Both hardware/P4-toolchain-gated and unrun.
+`net_latency_model.cpp` is the portable half, run locally: predicts
+FPGA-bypass at 0.75us vs. CPU-mediated (kernel socket) at 10.30us for a
+small one-sided WRITE, a 13.73x modeled speedup dominated by the
+CPU-mediated path's kernel-stack-traversal + interrupt-dispatch +
+context-switch stages the bypass path has no equivalent of — a
+falsifiable claim `rdma_bypass.p4`'s real measurement can be checked
+against once run. See `fpga_engine/fpga_net/README.md`). Several
 steps followed a "portable model + hardware-gated kernel" split (e.g.
 `clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
 duty cycle locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 23 (FPGA network stack).
+step 24 (Vitis AI evaluation).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
