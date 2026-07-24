@@ -5,3 +5,7 @@ compile_commands.json
 *.a
 *.dylib
 *.so
+.venv/
+__pycache__/
+sim_build/
+results.xml
