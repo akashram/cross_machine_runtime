@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (21/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (22/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -166,13 +166,25 @@ from-source build whose own `cmake` dependency is *also* building from
 source with LTO — the same shape of wall step 20's `python@3.12` install
 hit and cleared in a later session; z3 (already installed) is targeted as
 the solver so only yosys/sby remain. See `fpga_engine/symbiyosys/
-README.md`). Several
+README.md`), and a Dynamic Function eXchange (DFX) hot-swap flow (step
+22: `fpga_engine/partial_reconfig/` — `dfx_pblock.tcl` defines a
+reconfigurable pblock and implements two interface-compatible kernels as
+its two configurations, `axi_stream/axi_passthrough.cpp` (RM_A, reused)
+and new `axi_increment.cpp` (RM_B), writing a full bitstream for
+config 1 and a partial bitstream for config 2 plus a `pr_verify` safety
+check; `pr_host_driver.cpp` is the real XRT `load_xclbin()` hot-swap +
+timing measurement. Both hardware-gated and unrun. `reconfig_time_model.cpp`
+predicts hot-swap latency from partial-bitstream size — portable, run
+locally: predicts 6.25ms for a small single-kernel RM at a modeled 400
+MB/s ICAP bandwidth, for `pr_host_driver.cpp`'s real measurement to be
+checked against once run. See `fpga_engine/partial_reconfig/README.md`).
+Several
 steps followed a "portable model + hardware-gated kernel" split (e.g.
 `clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
 duty cycle locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 22 (partial reconfiguration).
+step 23 (FPGA network stack).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
