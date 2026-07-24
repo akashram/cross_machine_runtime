@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (20/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (21/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -154,13 +154,25 @@ for this step. Caught a real bug: the DMA controller's first version
 sampled `mem_rdata` one cycle too early relative to a registered memory's
 actual timing, producing a one-word-lagged copy; fixed by adding a second
 read-wait state, confirmed by re-running the test. See
-`fpga_engine/cocotb/README.md`). Several
+`fpga_engine/cocotb/README.md`), and SymbiYosys formal verification specs
+for that same RTL (step 21: `fpga_engine/symbiyosys/` — `axi_formal.v`/
+`axi_nodead.sby` prove the AXI4-Stream register slice's handshake always
+resolves (VALID-hold + data-stability while stalled, II=1 latency, no
+stuck backpressure), `dma_formal.v`/`dma_nooverlap.sby` prove
+`mem_rden`/`mem_wren` are never both asserted, both via full k-induction
+(`mode prove`) against the unmodified step-20 RTL. Unrun: `yosys` has no
+Homebrew bottle on this Mac (Tier 3 platform) and fell back to a
+from-source build whose own `cmake` dependency is *also* building from
+source with LTO — the same shape of wall step 20's `python@3.12` install
+hit and cleared in a later session; z3 (already installed) is targeted as
+the solver so only yosys/sby remain. See `fpga_engine/symbiyosys/
+README.md`). Several
 steps followed a "portable model + hardware-gated kernel" split (e.g.
 `clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
 duty cycle locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 21 (SymbiYosys formal verification).
+step 22 (partial reconfiguration).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
