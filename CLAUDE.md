@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (18/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (19/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -139,13 +139,20 @@ crossing penalty, clock gating dynamic-power modeling, and XADC die
 temperature/voltage rail monitoring (step 18: `xadc_sensors.cpp` uses
 XRT's real `get_info<thermal|electrical>()` sensor API, unrun; portable
 `parse_xadc_json.py` parses the JSON and flags out-of-tolerance rails,
-self-test passing locally — see `fpga_engine/xadc/README.md`). Several
+self-test passing locally — see `fpga_engine/xadc/README.md`), and an ILA
+debug session on the AXI4-Stream interface (step 19: `ila_probes.tcl`
+inserts a real ILA debug core on `axi_passthrough`'s TVALID/TREADY/TDATA/
+TLAST nets via Vivado Hardware Manager, unrun; portable
+`axi_trace_checker.py` mechanically applies the two AXI4-Stream handshake
+rules an ILA session is normally read by eye, self-test catches a
+synthetic free-running-counter protocol bug — see
+`fpga_engine/ila_debug/README.md`). Several
 steps followed a "portable model + hardware-gated kernel" split (e.g.
 `clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
 duty cycle locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 19 (ILA debug session).
+step 20 (cocotb testbenches).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
