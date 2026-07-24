@@ -49,20 +49,30 @@ module axi_formal (
         .m_axis_tvalid(m_axis_tvalid), .m_axis_tready(m_axis_tready)
     );
 
-    p_hold_while_stalled: assert property (
-        @(posedge aclk) disable iff (!aresetn)
-        (m_axis_tvalid && !m_axis_tready) |=>
-            (m_axis_tvalid && $stable(m_axis_tdata) && $stable(m_axis_tlast))
-    );
-
-    p_no_deadlock: assert property (
-        @(posedge aclk) disable iff (!aresetn)
-        (s_axis_tvalid && s_axis_tready) |=> m_axis_tvalid
-    );
-
-    p_ready_reflects_downstream: assert property (
-        @(posedge aclk) disable iff (!aresetn)
-        m_axis_tready |-> s_axis_tready
-    );
+    // Written as procedural asserts with $past/$stable rather than SVA
+    // `assert property (@(posedge clk) disable iff (...) ... |=> ...)` --
+    // that clocking/disable-iff/implication grammar needs YosysHQ's
+    // commercial Verific frontend, not present in the free OSS CAD Suite.
+    // Same properties, same k-induction proof strength under `mode prove`,
+    // just yosys-native syntax instead.
+    always @(posedge aclk) begin
+        if (aresetn) begin
+            p_ready_reflects_downstream: assert (!m_axis_tready || s_axis_tready);
+            // $initstate guard: at the very first sampled cycle there is no
+            // real previous cycle, so unguarded $past() is a free/unconstrained
+            // value the solver can pick to spuriously satisfy the antecedent --
+            // a fictitious counterexample, not a real one. Confirmed by hand:
+            // an earlier unguarded version of this block reported a
+            // p_no_deadlock failure at step 1, and tracing the counterexample
+            // VCD showed it was driven entirely by an arbitrary $past() choice
+            // at the fictitious initial state, not a reachable RTL state.
+            if (!$initstate && $past(aresetn)) begin
+                if ($past(m_axis_tvalid) && $past(!m_axis_tready))
+                    p_hold_while_stalled: assert (m_axis_tvalid && $stable(m_axis_tdata) && $stable(m_axis_tlast));
+                if ($past(s_axis_tvalid) && $past(s_axis_tready))
+                    p_no_deadlock: assert (m_axis_tvalid);
+            end
+        end
+    end
 
 endmodule

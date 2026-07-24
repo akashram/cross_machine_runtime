@@ -9,3 +9,5 @@ compile_commands.json
 __pycache__/
 sim_build/
 results.xml
+fpga_engine/symbiyosys/axi_nodead/
+fpga_engine/symbiyosys/dma_nooverlap/

@@ -160,13 +160,27 @@ for that same RTL (step 21: `fpga_engine/symbiyosys/` — `axi_formal.v`/
 resolves (VALID-hold + data-stability while stalled, II=1 latency, no
 stuck backpressure), `dma_formal.v`/`dma_nooverlap.sby` prove
 `mem_rden`/`mem_wren` are never both asserted, both via full k-induction
-(`mode prove`) against the unmodified step-20 RTL. Unrun: `yosys` has no
-Homebrew bottle on this Mac (Tier 3 platform) and fell back to a
-from-source build whose own `cmake` dependency is *also* building from
-source with LTO — the same shape of wall step 20's `python@3.12` install
-hit and cleared in a later session; z3 (already installed) is targeted as
-the solver so only yosys/sby remain. See `fpga_engine/symbiyosys/
-README.md`), and a Dynamic Function eXchange (DFX) hot-swap flow (step
+(`mode prove`) against the unmodified step-20 RTL. Actually run and
+passing: `yosys` has no Homebrew bottle on this Mac (Tier 3 platform), so
+rather than keep paying for a multi-hour from-source build (the same
+shape of wall step 20's `python@3.12` install hit — `cmake`/`tcl-tk` also
+building from source with LTO, ~2hrs in and still short of `yosys`
+itself), switched to YosysHQ's prebuilt OSS CAD Suite release for
+working `yosys`/`sby` in minutes; z3 (already installed) is the solver.
+Along the way, found the free suite's `yosys` doesn't parse full SVA
+`assert property (@(clk) disable iff (...) ...)` syntax (that grammar
+needs the commercial Verific plugin — confirmed via the suite's own
+bundled `fifo.sv` example, which has a Verific-gated branch using exactly
+that syntax), so `axi_formal.v`/`dma_formal.v` were rewritten into
+yosys-native procedural `assert`/`$past`/`$stable` form, same properties.
+That surfaced two real formal-harness bugs (not RTL bugs) on first run —
+an unguarded `$past()` producing a spurious counterexample from a
+fictitious initial state, and an unconstrained `rst_n` letting the
+solver start from an ungrounded garbage register state — both fixed
+(`$initstate` guard; `initial assume(!rst_n)`) and both proofs now PASS
+by full k-induction (basecase + induction both `pass`). See
+`fpga_engine/symbiyosys/README.md`), and a Dynamic Function eXchange
+(DFX) hot-swap flow (step
 22: `fpga_engine/partial_reconfig/` — `dfx_pblock.tcl` defines a
 reconfigurable pblock and implements two interface-compatible kernels as
 its two configurations, `axi_stream/axi_passthrough.cpp` (RM_A, reused)

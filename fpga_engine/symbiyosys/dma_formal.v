@@ -44,9 +44,23 @@ module dma_formal (
         .mem_rden(mem_rden), .mem_wren(mem_wren), .mem_rdata(mem_rdata)
     );
 
-    p_no_overlapping_transactions: assert property (
-        @(posedge clk) disable iff (!rst_n)
-        !(mem_rden && mem_wren)
-    );
+    // Ground the basecase in an actual reset: without this, rst_n is a
+    // free top-level input the solver can hold at 1 from the very first
+    // sampled cycle, so state/mem_rden/mem_wren -- plain regs with no
+    // explicit initial value -- start at an arbitrary "anyinit" value
+    // instead of a real post-reset one. Confirmed by hand: an earlier
+    // version without this assumption found a "counterexample" with
+    // mem_rden=1 and mem_wren=1 simultaneously at the very first cycle,
+    // state=S_NEXT (5) -- a combination no real FSM transition produces,
+    // only reachable as an ungrounded power-on garbage value.
+    initial assume(!rst_n);
+
+    // Procedural assert rather than SVA `assert property (...)` -- see
+    // axi_formal.v's header for why (Verific-only grammar, not in the
+    // free OSS CAD Suite). Same property, same k-induction proof strength.
+    always @(posedge clk) begin
+        if (rst_n)
+            p_no_overlapping_transactions: assert (!(mem_rden && mem_wren));
+    end
 
 endmodule
