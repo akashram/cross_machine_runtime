@@ -1,0 +1,29 @@
+# dma_nooverlap.sby — SymbiYosys formal proof: the DMA controller never
+# issues overlapping transactions (mem_rden and mem_wren are never both
+# asserted in the same cycle).
+#
+# Targets dma_formal.v, a thin wrapper around cocotb/dma_controller.v --
+# see that file's header for the property statement and why it's
+# guaranteed by the FSM's structure, and dma_formal.v's header for why
+# it's worth machine-checking that anyway. `mode prove` runs full
+# k-induction over the controller's 7-state FSM, which converges quickly
+# at this size and proves the property for every reachable state.
+#
+# Run: `sby -f dma_nooverlap.sby` (needs yosys + z3 on the PATH -- see
+# axi_nodead.sby's header for the solver choice).
+
+[options]
+mode prove
+depth 20
+
+[engines]
+smtbmc z3
+
+[script]
+read -formal dma_controller.v
+read -formal dma_formal.v
+prep -top dma_formal
+
+[files]
+../cocotb/dma_controller.v
+dma_formal.v
