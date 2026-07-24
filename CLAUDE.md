@@ -122,7 +122,7 @@ batching — see `transformer/README.md` for the stated scope. See
 PLAN.md's "Minimal Transformer" section (inserted into Phase 6) for the
 full rationale.
 
-**Phase 7: FPGA Backend — IN PROGRESS (19/25 steps, as of 2026-07-23)**
+**Phase 7: FPGA Backend — IN PROGRESS (20/25 steps, as of 2026-07-23)**
 Lives in `fpga_engine/`. No AWS F1 instance on Mac, so — same split as
 Phase 3/4 — every step is code-complete and locally runnable wherever it
 doesn't strictly need Vivado/Vitis HLS/an FPGA card, with the
@@ -146,13 +146,21 @@ TLAST nets via Vivado Hardware Manager, unrun; portable
 `axi_trace_checker.py` mechanically applies the two AXI4-Stream handshake
 rules an ILA session is normally read by eye, self-test catches a
 synthetic free-running-counter protocol bug — see
-`fpga_engine/ila_debug/README.md`). Several
+`fpga_engine/ila_debug/README.md`), and cocotb testbenches for the AXI4-
+Stream and DMA controller RTL (step 20: `fpga_engine/cocotb/` —
+hand-written Verilog models driven by real cocotb tests against Icarus
+Verilog, actually run locally, 4/4 passing — no F1/Vitis HLS dependency
+for this step. Caught a real bug: the DMA controller's first version
+sampled `mem_rdata` one cycle too early relative to a registered memory's
+actual timing, producing a one-word-lagged copy; fixed by adding a second
+read-wait state, confirmed by re-running the test. See
+`fpga_engine/cocotb/README.md`). Several
 steps followed a "portable model + hardware-gated kernel" split (e.g.
 `clock_gating/clock_gating_model.cpp` predicts dynamic power reduction vs.
 duty cycle locally; `timing_closure/critical_path_model.cpp` and
 `slr/slr_crossing_model.cpp` do the analogous thing for their steps) —
 each step's own README documents which half is measured vs. TODO. Next:
-step 20 (cocotb testbenches).
+step 21 (SymbiYosys formal verification).
 
 **Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
