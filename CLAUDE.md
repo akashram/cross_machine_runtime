@@ -305,10 +305,64 @@ half of each step is measured vs. TODO.
 
 Phase 8 is now fully code-complete (13/13); hardware validation is
 deferred along with the earlier phases (see execution strategy below).
-Next local-implementation phase: Phase 9 (Inference Serving), currently
-stubbed.
 
-**Phases 9, 10, 12 — STUBBED, pending full local implementation**
+**Phase 9: Inference Serving — CODE COMPLETE (9/9 steps, 2026-07-27)**
+Lives in `inference_serving/`. Unlike Phases 3/4/7/8, most of this phase
+turned out to have no hardware dependency at all, so most steps are not
+just written but **actually compiled, run, and tested on this Mac**, real
+captured output in each step's own README: `paged_kv` (step 1,
+stack-based `BlockAllocator` + per-sequence `BlockTable`, 300-trial
+`foundation/proptest` property test — deliberately diverges from the
+original stub's per-call device-pointer signature, since block
+bookkeeping is backend-independent and device K/V bytes are a separate,
+GPU-specific concern), `continuous_batching` (step 2, real
+`ContinuousBatcher` class driving a discrete-event simulation against
+static batching — 1.85x throughput speedup, 100% vs 52.8% device-slot
+utilization, reproducing the vLLM paper's core finding as an actual
+measurement), `sla_scheduler` (step 3, textbook-optimal
+Earliest-Deadline-First scheduling with preemption falling directly out
+of the admission rule — 0% SLA violations vs FIFO's 36.5% on a
+mixed-urgency trace), `speculative_decoding` (step 5, reuses
+`transformer/`'s real architecture as both draft and verifier, both
+actually trained on CPU; the correctness property that matters — spec-
+decoded output is token-for-token identical to plain verifier-only greedy
+decoding regardless of draft quality — is verified directly, not just
+claimed; 4.78x fewer verifier calls with a trained draft, 1.05x with a
+near-random one, both exactly correct), `gptq` (step 6, real
+Hessian-guided greedy column quantization — Gauss-Jordan Hessian
+inversion, error compensation onto not-yet-quantized columns — applied to
+a trained transformer's actual `w_out` weight with real calibration
+activations; caught and fixed a real segfault from a weight-layout
+mismatch during development, output MSE roughly half round-to-nearest's
+on correlated calibration data), `kv_quant` (step 7, per-tensor symmetric
+INT8 quantization round-tripped through K/V right after projection,
+applied to the real trained model — exactly 4.000x memory reduction at
+7B-class dimensions, perplexity impact unmeasurably small on this
+saturated corpus), and `serving_backend` (step 8, `ServingRouter` with a
+real CPU backend, GPU/FPGA/TPU registered with honest
+`available = false` + reason strings rather than omitted, so the
+GPU>TPU>FPGA>CPU fallback priority order itself is tested, not just "falls
+back to whatever's available"). Two steps stay genuinely hardware-gated:
+`flash_decoding` (step 4, real split-K CUDA kernels parallelizing
+decode-step attention across the KV dimension — the axis
+`gpu_engine/flash_attn`'s query-tile grid runs out of parallelism on once
+there's only one query row per (batch,head) — unrun, no CUDA toolchain
+here) and half of `serving_bench` (step 9 — this repo's own CPU-path
+TTFT/TPOT/throughput numbers ARE real and measured locally, real
+`std::chrono` timing of real transformer forward passes, with TPOT ~8.6x
+TTFT as a direct, measured consequence of `transformer/model_forward`
+having no KV cache; the vLLM/TensorRT-LLM comparison half stays
+hardware-gated). Also fixed `inference_serving/CMakeLists.txt`'s
+over-broad gate, which had been skipping the *entire* directory (not just
+the GPU-dependent steps) unless `CMAKE_SYSTEM_NAME == Linux`. See
+`inference_serving/README.md`'s per-step status table.
+
+Phase 9 is now fully code-complete (9/9); hardware validation (step 4,
+half of step 9) is deferred along with the earlier phases (see execution
+strategy below). Next local-implementation phase: Phase 10
+(Observability), currently stubbed.
+
+**Phases 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
 outlines exist. Code bodies are still 1–3 line TODOs.
 
