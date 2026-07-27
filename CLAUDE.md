@@ -256,10 +256,59 @@ each step's own README documents which half is measured vs. TODO.
 
 Phase 7 is now fully code-complete (25/25); hardware validation is
 deferred along with the earlier phases (see execution strategy below).
-Next local-implementation phase: Phase 8 (TPU Backend), currently
+
+**Phase 8: TPU Backend — CODE COMPLETE (13/13 steps, 2026-07-27)**
+Lives in `tpu_engine/`. No GCP TPU VM on this Mac, so — same split as
+Phase 3/4/7 — every step is real, non-stub code: GCP TPU VM provisioning +
+JAX matmul/correctness validation (step 1), MXU/HBM/ICI hardware
+benchmarks (step 2, `mxu_util_bench.py`/`hbm_bandwidth_bench.py`/
+`ici_latency_bench.py`), a real MLIR `DialectConversion` pass lowering the
+`runtime` dialect (`compiler/dialect`) to StableHLO (step 3,
+`StableHLOLowerPass.cpp` — covers every op except `gather`/`scatter`, left
+as a genuine TODO rather than a shallow wrong version, and
+`transfer`/`kernel_call`, deliberately left illegal since they're
+placement/kernel-spec artifacts that shouldn't reach the TPU path;
+toolchain-gated one level deeper than the rest of Phase 4 since StableHLO
+pins to a specific LLVM commit, not a release), StableHLO execution via
+`jax.export` validated against a numpy reference (step 4), pjit-sharded
+MLP scaling (step 7, mirrors `distributed_training/column_parallel_linear`
++ `row_parallel_linear`'s GPU sharding scheme so scaling efficiency is
+directly comparable across backends once both have real numbers),
+gradient all-reduce over ICI (step 8, notes that the closest real in-repo
+number — `networking/ring_allreduce`'s ~0.1 GB/s loopback bandwidth — is
+an explicitly-documented overhead floor, not a fair EFA comparison), a
+dense 128-boundary MXU utilization-cliff sweep (step 9), an HLO/compiled-
+text dump script plus a written VLIW-vs-x86-OOO-vs-NVIDIA-SIMT analysis
+(step 10 — the load-bearing difference: a bad TPU VLIW bundle-packing
+decision has no hardware fallback, unlike OOO's reorder buffer or SIMT's
+multi-warp latency hiding), a combined MXU/HBM/ICI profiler capture script
+(step 11), and a SparseCore-vs-dense-gather embedding comparison (step 13,
+TPU v5-only since SparseCore doesn't exist on v4; the SparseCore sketch
+raises `NotImplementedError` rather than faking a callable, since
+`jax-tpu-embedding`'s API is less stable than core JAX). Three steps need
+no TPU/JAX at all and were **actually compiled and run locally** (`clang++
+-O2 -std=c++17`, no CMake, same convention as `fpga_engine`'s `*_model.cpp`
+files, real captured output in each README): `layout_opt`'s MXU tile-
+padding utilization-ceiling model (finding: vocab-size misalignment is
+nearly free, 99.9%, but small-batch padding is catastrophic — 0.8%
+ceiling at batch=1 decode — an argument for batching decode requests in
+Phase 9 independent of any TPU-specific measurement), `hbm_sram`'s
+analytical HBM↔VMEM double-buffering overlap model (confirms cubic tiles
+become compute-bound as they grow while tall-skinny/wide tiles stay
+transfer-bound regardless, explaining XLA's preference for roughly-cubic
+tiling), and `cost_model`'s TPU v4/A100/H100 $/FLOP and FLOPS/Watt
+comparison (finding: all three land within ~5% on raw $/PFLOP-hour at
+peak, so the real device-choice driver for a given workload is which
+device's utilization ceiling it can actually reach, not the peak-vs-peak
+ranking). See `tpu_engine/README.md`'s per-step status table for which
+half of each step is measured vs. TODO.
+
+Phase 8 is now fully code-complete (13/13); hardware validation is
+deferred along with the earlier phases (see execution strategy below).
+Next local-implementation phase: Phase 9 (Inference Serving), currently
 stubbed.
 
-**Phases 8, 9, 10, 12 — STUBBED, pending full local implementation**
+**Phases 9, 10, 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
 outlines exist. Code bodies are still 1–3 line TODOs.
 
