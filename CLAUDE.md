@@ -359,10 +359,54 @@ the GPU-dependent steps) unless `CMAKE_SYSTEM_NAME == Linux`. See
 
 Phase 9 is now fully code-complete (9/9); hardware validation (step 4,
 half of step 9) is deferred along with the earlier phases (see execution
-strategy below). Next local-implementation phase: Phase 10
-(Observability), currently stubbed.
+strategy below).
 
-**Phases 10, 12 — STUBBED, pending full local implementation**
+**Phase 10: Observability, Testing, AI Integration — CODE COMPLETE (9/9 steps, 2026-07-27)**
+Lives in `observability/`. Like Phase 9, most steps turned out to have a
+genuinely local-runnable half, actually run with real captured output:
+`opentelemetry` (step 2, hand-rolled span lifecycle + OTLP-JSON export —
+deliberately not the OTel C++ SDK, same rationale as `foundation/proptest`
+— parses its own exported JSON back and verifies 32/16-hex-char id formats,
+parent-child linkage, attributes/events/errors), `dashboard` (step 3, real
+ingestion/histogram/report pipeline run against synthetic-but-labeled
+input shaped like `serving_bench`'s real numbers), `symbiyosys_ci`
+(step 5, actually re-runs `fpga_engine/symbiyosys`'s two real passing
+proofs with SHA-256 RTL-change detection — `yosys`/`sby` are already
+installed from Phase 7, so this one runs for real unlike most of this
+phase's toolchain-gated steps; caught and fixed a real bash-3.2
+portability bug along the way), `chaos` (step 6, 2 of PLAN.md's 3 named
+scenarios run for real — Raft leader-kill measuring actual 183.7ms
+recovery time, reusing `networking/raft`'s real cluster; FPGA thermal
+event using `fpga_engine/thermal_router`'s real decision logic — GPU-node-
+kill stays a documented gap needing real GPU hardware), and the three
+Claude-API-driven agent steps' portable halves (step 7's `ncu --csv`
+parser, step 9's rule-based issue-detection heuristic — run against a
+synthetic trace built from `serving_bench`'s own real numbers, correctly
+recovering the same ~8.6x placement gap that step's analysis found by
+hand). `ebpf` (step 1, real BCC tracepoint/kprobe program) and `tlc`
+(step 4, real TLC model-checking configs for the existing Raft/Collective
+TLA+ specs, including a proper MC-wrapper-module split to bound Raft's
+otherwise-infinite state space) stay hardware/toolchain-gated — Java for
+TLC was a deferred install decision, tracked alongside Phase 8's JAX
+decision in project memory. All three AI-agent steps (7, 8, 9) get real,
+complete Anthropic SDK client code (`model="claude-opus-4-8"`,
+`output_config.format` structured outputs) but **no actual API calls are
+made from this repo** — an explicit decision this session (see project
+memory) to keep the three agent steps' LLM-calling halves gated the same
+way GPU/TPU hardware is, rather than spend this session's API budget on a
+benchmark-agent side task. Also fixed `observability`'s `CMakeLists.txt`,
+which had been correctly building everything already — no gate bug here,
+unlike `inference_serving`'s Phase 9 fix. See `observability/README.md`'s
+per-step status table.
+
+Phase 10 is now fully code-complete (9/9); hardware/toolchain validation
+(steps 1, 4, the AI agents' real API calls, step 8's GPU half, chaos's
+remaining scenario) is deferred along with the earlier phases (see
+execution strategy below). Next local-implementation phase: Phase 12
+(Machine Learning Library), currently stubbed — the last phase in the
+local implementation order.
+
+**Phase 12 — STUBBED, pending full local implementation**
 Stub directories, interface headers, CMakeLists.txt, and README.md design
 outlines exist. Code bodies are still 1–3 line TODOs.
 
