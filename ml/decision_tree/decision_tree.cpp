@@ -4,7 +4,7 @@
 #include <cmath>
 #include <numeric>
 
-DecisionTree::DecisionTree(TreeParams params) : params_(params) {}
+DecisionTree::DecisionTree(TreeParams params) : params_(params), rng_(params.random_state) {}
 
 double DecisionTree::node_impurity(const std::vector<int>& class_counts, int total) const {
     if (total == 0) return 0.0;
@@ -46,7 +46,25 @@ bool DecisionTree::find_best_split(const Features& X, const Labels& y, const std
     std::vector<std::pair<float, int>> sorted;
     sorted.reserve(static_cast<std::size_t>(n));
 
-    for (int feature = 0; feature < n_features_; ++feature) {
+    // Candidate feature set for THIS split node: all features (plain
+    // CART), or a fresh random subset drawn independently per node when
+    // params_.max_features is set -- the real per-node subsampling
+    // RandomForest needs (Breiman's algorithm; see TreeParams comment).
+    std::vector<int> candidate_features;
+    if (params_.max_features > 0 && params_.max_features < n_features_) {
+        candidate_features.resize(static_cast<std::size_t>(n_features_));
+        for (int f = 0; f < n_features_; ++f) candidate_features[static_cast<std::size_t>(f)] = f;
+        for (int f = 0; f < params_.max_features; ++f) {
+            std::uniform_int_distribution<int> pick(f, n_features_ - 1);
+            std::swap(candidate_features[static_cast<std::size_t>(f)], candidate_features[static_cast<std::size_t>(pick(rng_))]);
+        }
+        candidate_features.resize(static_cast<std::size_t>(params_.max_features));
+    } else {
+        candidate_features.resize(static_cast<std::size_t>(n_features_));
+        for (int f = 0; f < n_features_; ++f) candidate_features[static_cast<std::size_t>(f)] = f;
+    }
+
+    for (int feature : candidate_features) {
         sorted.clear();
         for (int idx : indices)
             sorted.emplace_back(X[static_cast<std::size_t>(idx)][static_cast<std::size_t>(feature)],

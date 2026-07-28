@@ -35,6 +35,13 @@ PLAN.md Phase 12a step 1: CART (Gini/entropy splitting), pre-pruning
 - `feature_importance`: unnormalized impurity-decrease sum per feature,
   weighted by node sample count (the standard Breiman-et-al. definition),
   normalized to sum to 1 across features.
+- `TreeParams::max_features` (added while building `random_forest`, step
+  2): when set, `find_best_split` draws a **fresh random feature subset
+  independently at every split node**, not once per tree — the real
+  per-node subsampling Breiman's Random Forest algorithm needs. A
+  once-per-tree subset is a different, weaker technique (closer to the
+  "random subspace method") sometimes conflated with it; this
+  implementation is the real thing.
 
 ## Results (captured 2026-07-27, Apple clang 14 / `-std=c++2b`, this Mac)
 

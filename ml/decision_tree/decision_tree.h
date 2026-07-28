@@ -1,4 +1,5 @@
 #pragma once
+#include <random>
 #include <vector>
 #include <span>
 
@@ -20,6 +21,15 @@ struct TreeParams {
     int   min_samples_split = 2;
     float min_impurity_decrease = 0.0f;
     enum class Criterion { GINI, ENTROPY } criterion = Criterion::GINI;
+
+    // -1 = consider every feature at every split (plain CART). >0 =
+    // consider a random subset of this size at EACH split node
+    // independently -- the actual per-node feature-subsampling
+    // RandomForest (step 2) needs, per Breiman's algorithm (not a
+    // once-per-tree subset, which is a different, weaker technique
+    // sometimes confused with it).
+    int max_features = -1;
+    unsigned random_state = 0;
 };
 
 // One node of the tree, stored flat in DecisionTree::nodes_ (indices, not
@@ -57,6 +67,7 @@ private:
     std::vector<double> importance_accum_;  // unnormalized impurity-decrease sum per feature
     int n_features_ = 0;
     int n_classes_ = 0;
+    mutable std::mt19937 rng_;
 
     // Grows the subtree rooted at `indices` (a subset of X/y's rows),
     // returns the index of the created node in nodes_. Recursive --
