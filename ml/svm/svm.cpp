@@ -140,14 +140,22 @@ void SVM::fit(const Features& X, const Labels& y) {
     b_ = b;
 }
 
-Labels SVM::predict(const Features& X) const {
-    Labels out;
+std::vector<float> SVM::decision_function(const Features& X) const {
+    std::vector<float> out;
     out.reserve(X.size());
     for (const auto& row : X) {
         float sum = b_;
         for (std::size_t i = 0; i < X_sv_.size(); ++i) sum += alpha_sv_[i] * y_sv_[i] * kernel(X_sv_[i], row);
-        out.push_back(sum >= 0.0f ? 1.0f : -1.0f);
+        out.push_back(sum);
     }
+    return out;
+}
+
+Labels SVM::predict(const Features& X) const {
+    std::vector<float> scores = decision_function(X);
+    Labels out;
+    out.reserve(scores.size());
+    for (float s : scores) out.push_back(s >= 0.0f ? 1.0f : -1.0f);
     return out;
 }
 

@@ -34,6 +34,12 @@ public:
     Labels predict(const Features& X) const;
     float score(const Features& X, const Labels& y) const;
 
+    // Raw decision value (signed margin) before thresholding at 0 --
+    // exposed for one-vs-rest multiclass wrapping (ml/openml_bench),
+    // which needs a real-valued confidence to pick argmax across binary
+    // classifiers rather than just majority-voting {-1,+1} labels.
+    std::vector<float> decision_function(const Features& X) const;
+
     int n_support_vectors() const { return static_cast<int>(X_sv_.size()); }
 
 private:
