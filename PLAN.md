@@ -316,16 +316,29 @@ phase is ever implemented.
 24. **PPO-based RLHF** — policy (SFT init) + critic (reward model) + KL penalty against frozen reference model, clip ratio, measure reward vs. KL divergence tradeoff across training, monitor for reward hacking
 25. **DPO (Direct Preference Optimization)** — offline alternative to PPO: optimize policy directly on preference pairs without a reward model, compare convergence speed and final reward vs. PPO baseline on identical preference data, document when to prefer each
 
+Step 26 added 2026-07-28, extending the original 25-step scope (same
+treatment as the Minimal Transformer addition above). Motivated by a
+real, already-documented finding from step 17: `AsyncCheckpointWriter`'s
+background `std::thread` still performs a *blocking* `write()` syscall,
+and on this dev machine's 2 physical cores that thread measurably
+competes with the "training step" it's supposed to overlap — the reason
+step 17's own README couldn't cleanly demonstrate the overlap benefit
+it's designed to provide. This step targets that specific, real problem,
+not a generic "also try io_uring."
+
+26. **io_uring-based async checkpoint I/O** — replace step 17's thread-plus-blocking-write design with real io_uring submission/completion queues (via `liburing`) for the checkpoint shard write path. Registered/fixed buffers (`IORING_REGISTER_BUFFERS`) for genuinely zero-copy shard writes; batch all of a rank's per-shard writes into a single `io_uring_enter` call rather than one syscall per shard. Re-run step 17's exact measurement methodology (`sleep_for`-simulated training step) for a direct, apples-to-apples comparison against the thread-based baseline — report whichever real result comes out, not an assumed improvement. Linux-only (io_uring has no macOS equivalent) — joins the Linux-gated bucket alongside AF_XDP/`userspace_net`/PTP/NIC deep dive in Phase 5.
+
 ### Deliverables
 - `/distributed_training/` directory
 - Scaling efficiency chart: throughput vs. number of GPUs (data parallel, tensor parallel, pipeline parallel, 3D)
 - ZeRO memory analysis: memory per rank at each stage
 - MoE routing analysis: expert utilization distribution
 - RLHF vs. DPO comparison: reward, KL divergence, training stability, wall-clock time
+- io_uring vs. thread-based checkpoint write comparison, identical measurement methodology, honest result either way
 - Design doc: "Distributed Training Architecture"
 
 ### Definition of done
-Linear scaling efficiency > 85% from 1→8 GPUs (data parallel). ZeRO-3 enables training a model 8x larger than fits on a single GPU. 1F1B pipeline bubble fraction < 5% with sufficient microbatches. DPO training loop produces a measurably higher-reward policy than SFT baseline on held-out prompts.
+Linear scaling efficiency > 85% from 1→8 GPUs (data parallel). ZeRO-3 enables training a model 8x larger than fits on a single GPU. 1F1B pipeline bubble fraction < 5% with sufficient microbatches. DPO training loop produces a measurably higher-reward policy than SFT baseline on held-out prompts. Step 26's io_uring path is measured against step 17's thread-based baseline using identical methodology — whichever shows less CPU-contention noise is the reported, honest result, not an assumed one.
 
 ---
 

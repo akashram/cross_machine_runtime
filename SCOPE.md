@@ -230,7 +230,7 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - Unified transfer engine: CPU↔GPU, GPU↔GPU, CPU↔FPGA, GPU↔FPGA
 - NUMA-aware allocation and thread binding
 - Zero-copy IPC
-- io_uring for checkpoint I/O path
+- io_uring for checkpoint I/O path — scoped as a concrete step 2026-07-28: Phase 6 step 26, replacing `distributed_training/checkpoint`'s thread-plus-blocking-write design (see that section below)
 - Memory-mapped files for fast checkpoint write/restart
 - GPUDirect Storage: direct NVMe → GPU memory path without CPU staging — used for fast checkpoint loading and dataset prefetching at scale
 - Intel RAPL CPU power measurement
@@ -284,6 +284,7 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - ZeRO-Infinity: offload parameters, gradients, and optimizer states to CPU RAM and NVMe when GPU memory is exhausted — measured memory savings and throughput cost at each offload level
 - Mixture of Experts (MoE) / Expert parallelism: learned routing mechanism dispatching tokens to experts on different devices — distinct from 3D parallelism, required for frontier model architectures (GPT-4, Mixtral style)
 - Checkpoint sharding: sharded checkpoint format across ranks, async checkpoint writing overlapped with training, fast restore — measured checkpoint write/restore time at scale
+- io_uring-based checkpoint I/O (added 2026-07-28, Phase 6 step 26): real submission/completion queues + registered buffers replacing the thread-plus-blocking-write design above, motivated directly by that design's own documented CPU-contention finding — measured against it with identical methodology, not assumed better
 - NCCL tuning: `NCCL_ALGO`, `NCCL_PROTO`, `NCCL_BUFFSIZE`, `NCCL_SOCKET_NTHREADS` — topology-specific tuning with measured collective throughput before/after
 - Ampere/Hopper 2:4 structured sparsity: hardware-accelerated 2 non-zero per 4 elements, 2x sparse matmul throughput on A100/H100 — model pruning to 2:4 pattern, measured throughput vs. dense baseline
 - Distributed data loading pipeline: DataLoader workers, prefetching, dataset sharding across ranks, WebDataset format for streaming — measured GPU utilization with and without pipeline, ensuring data loading is never the bottleneck
