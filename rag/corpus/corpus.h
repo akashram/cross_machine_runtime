@@ -48,6 +48,46 @@ inline std::vector<Document> sample_documents() {
   };
 }
 
+// Bulk filler for steps 6/8: at only 8 documents, ml/knn's BallTree
+// (default leaf_size=10) is a single leaf, so its "approximate" mode is
+// literally identical to its exact mode -- no real ANN tradeoff to
+// measure. These distractor documents carry no relevance label (every
+// sample_queries() judgment still points at a sample_documents() id) and
+// exist purely to bulk the index up to a scale where approximate search
+// actually behaves differently from exact search, the same way ml/knn's
+// own tests use n=300-2000 rather than a handful of points. Generated
+// from real-word templates (not gibberish) so the encoder's char-level
+// tokenizer still sees plausible English text, deterministic (no RNG) so
+// every step sees the identical distractor set.
+inline std::vector<Document> sample_distractor_documents(int count = 40) {
+  static const char *kSubjects[] = {"the engineer",   "the artist",   "the farmer",     "the pilot",
+                                     "the musician",   "the athlete",  "the chef",       "the teacher",
+                                     "the scientist",  "the sailor"};
+  static const char *kVerbs[] = {"builds", "studies", "repairs", "designs", "practices"};
+  static const char *kObjects[] = {"a wooden table",   "a small engine",  "an old bridge",
+                                    "a garden fence",   "a paper map",     "a metal frame",
+                                    "a quiet melody",   "a running trail"};
+  static const char *kTails[] = {"every morning before work.", "with great care and patience.",
+                                  "during the long afternoon.", "after a short break for lunch."};
+
+  std::vector<Document> docs;
+  docs.reserve(static_cast<std::size_t>(count));
+  int next_id = 8; // sample_documents() uses ids 0-7
+  for (int i = 0; i < count; ++i) {
+    std::string text = std::string(kSubjects[i % 10]) + " " + kVerbs[i % 5] + " " + kObjects[i % 8] + " " +
+                        kTails[i % 4];
+    docs.push_back({next_id++, text});
+  }
+  return docs;
+}
+
+inline std::vector<Document> sample_documents_with_distractors(int distractor_count = 40) {
+  std::vector<Document> docs = sample_documents();
+  std::vector<Document> distractors = sample_distractor_documents(distractor_count);
+  docs.insert(docs.end(), distractors.begin(), distractors.end());
+  return docs;
+}
+
 inline std::vector<QueryJudgment> sample_queries() {
   return {
       {"what is the capital of france", 0, "paris"},

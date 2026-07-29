@@ -28,13 +28,20 @@ struct TrainedEncoder {
 // layer and a smaller d_model/d_ff keep a full training run within a few
 // seconds instead of several minutes, while still reaching high in-batch
 // retrieval accuracy (see indexing_pipeline/README.md's measured numbers).
+// `extra_vocab_text`: appended to the tokenizer's vocab-building corpus
+// ONLY -- not used as training data -- so callers that need to encode
+// additional text through the same tokenizer later (e.g. recall_eval's
+// distractor documents, bulking up the index without being part of the
+// contrastive training signal) don't hit an "unseen character" error.
 inline TrainedEncoder train_corpus_encoder(const std::vector<Document> &docs, const std::vector<QueryJudgment> &queries,
-                                            int d_model = 16, int num_heads = 2, int num_layers = 1, int d_ff = 32,
-                                            int embed_dim = 10, int epochs = 200, float lr = 0.15f,
-                                            float temperature = 0.15f, unsigned init_seed = 21) {
+                                            const std::string &extra_vocab_text = "", int d_model = 16,
+                                            int num_heads = 2, int num_layers = 1, int d_ff = 32, int embed_dim = 10,
+                                            int epochs = 200, float lr = 0.15f, float temperature = 0.15f,
+                                            unsigned init_seed = 21) {
   std::string joint;
   for (const auto &d : docs) joint += d.text + " ";
   for (const auto &q : queries) joint += q.query + " ";
+  joint += extra_vocab_text;
   transformer::CharTokenizer tok(joint);
 
   EncoderConfig cfg{tok.vocab_size(), d_model, num_heads, num_layers, d_ff, /*max_seq_len=*/128, embed_dim};
