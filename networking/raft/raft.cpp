@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <exception>
 #include <random>
 
 namespace raft {
@@ -79,11 +80,30 @@ struct Reader {
   }
 };
 
+// Best-effort: a failed send to a peer (down, mid-crash, or just had
+// its read side shut down by our own stop()) is a normal, EXPECTED
+// condition in a distributed system, not a fatal one for this node --
+// the whole reason Raft has periodic heartbeats and repeated elections
+// is to retry exactly this kind of transient RPC failure. A real,
+// stress-test-caught bug used to live here: an unreachable peer's
+// Channel::send() throwing std::runtime_error (e.g. "Connection reset
+// by peer") propagated straight out of sendFrame with nothing to catch
+// it, calling std::terminate() in whichever thread hit it (SIGABRT,
+// confirmed via a captured crash: "terminating due to uncaught
+// exception ... Connection reset by peer") -- one send failure to one
+// unreachable peer used to be able to kill the entire node. Swallowing
+// it here and letting the next tick retry is the correct behavior, not
+// a workaround.
 void sendFrame(netcommon::Channel &ch, std::mutex &sendMu, int peer, const std::vector<uint8_t> &payload) {
   std::lock_guard<std::mutex> lock(sendMu);
-  uint32_t lenNet = htonl(static_cast<uint32_t>(payload.size()));
-  ch.send(peer, &lenNet, 4);
-  if (!payload.empty()) ch.send(peer, payload.data(), payload.size());
+  try {
+    uint32_t lenNet = htonl(static_cast<uint32_t>(payload.size()));
+    ch.send(peer, &lenNet, 4);
+    if (!payload.empty()) ch.send(peer, payload.data(), payload.size());
+  } catch (const std::exception &) {
+    // Dropped RPC to an unreachable peer -- normal; retried on the next
+    // heartbeat/election tick, not re-thrown.
+  }
 }
 
 std::vector<uint8_t> recvFrame(netcommon::Channel &ch, int peer) {
@@ -122,19 +142,38 @@ void RaftNode::start() {
 
 void RaftNode::stop() {
   if (!running_.exchange(false)) return;
-  // Deliberately detach, not join, the receiver threads: each is blocked
-  // in Channel::recv(peer, ...), which only unblocks when `peer` sends
-  // something. Joining would require every *other* node to also be
-  // stopping right now and send a shutdown frame back — fine for a
-  // clean-shutdown-of-the-whole-cluster test, but wrong for simulating a
-  // single node's crash (raft_test.cpp's failover scenario), where the
-  // survivors keep running and never send one. `channel_` outlives these
-  // detached threads in every caller of this class (the test/harness
-  // owns the Channel for the whole process lifetime), so a thread left
-  // blocked in recv() forever is inert, not a dangling reference. The
-  // ticker thread is always safe to join — it only waits on a sleep and
-  // its own `running_` check, no peer cooperation required.
-  for (auto &t : receiverThreads_) if (t.joinable()) t.detach();
+  // A real, found-by-crashing bug used to live here: this used to detach
+  // (not join) the receiver threads, reasoning that each is blocked in
+  // Channel::recv(peer, ...) forever and so is "inert." That reasoning
+  // has a hole -- a receiver thread isn't always blocked in recv(); it
+  // can be anywhere inside handleRequestVote/handleAppendEntries/etc.,
+  // actively touching `this` (mu_, log_, peerState_, ...). If the
+  // RaftNode object gets destructed (the normal case: the test/harness's
+  // unique_ptr<RaftNode> going out of scope) while a detached thread is
+  // still executing one of those handlers, or while it's still blocked
+  // in recv() referencing the now-dangling `channel_`, that thread
+  // resumes into freed memory. This was rare in practice (fast runs keep
+  // threads parked in the recv() syscall almost the whole time) but
+  // reliably reproducible under CPU contention (a concurrent CPU-heavy
+  // process widens the window for a receiver thread to be scheduled out
+  // mid-handler instead of blocked in the syscall) -- confirmed via a
+  // captured crash report: SIGSEGV / EXC_BAD_ACCESS at address 0x0,
+  // faulting thread inside recvFrame -> Channel::recv on a dangling
+  // `channel_` reference, from a detached receiver thread.
+  //
+  // Fixed properly, not papered over: Channel::shutdownPeer(peer) (added
+  // for this) forcibly unblocks our own recv() call for that peer with
+  // no cooperation needed from the peer -- unlike chandy_lamport's
+  // mutual-shutdown-message pattern (send a message, wait for the peer's
+  // reply), which doesn't fit Raft's asymmetric scenario where a
+  // "crashed" node's survivors keep running and have no reason to send
+  // it anything back. After shutdownPeer(), the receiver thread's
+  // blocked or next recv() call throws, receiverLoop's catch(...)
+  // returns, and t.join() below completes -- so by the time stop()
+  // returns, EVERY thread this RaftNode owns has genuinely exited, and
+  // the object can be safely destructed.
+  for (int p : peers_) channel_.shutdownPeer(p);
+  for (auto &t : receiverThreads_) if (t.joinable()) t.join();
   receiverThreads_.clear();
   if (tickerThread_.joinable()) tickerThread_.join();
 }

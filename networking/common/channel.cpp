@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <csignal>
 #include <cstring>
 #include <future>
 #include <stdexcept>
@@ -16,6 +17,25 @@
 
 namespace netcommon {
 namespace {
+
+// A real, pre-existing gap this project's socket layer had, surfaced
+// (not caused) by RaftNode::stop()'s shutdownPeer() fix: writing to a
+// socket whose peer has reset or half-closed the connection raises
+// SIGPIPE by default, and SIGPIPE's default disposition is to terminate
+// the whole process -- silently, with no exception, no unwind, nothing
+// for send()'s caller to even catch. This affected every Channel user
+// in Phase 5, not just Raft; it just never manifested before because
+// nothing previously did a live socket shutdown while a peer kept
+// sending. Ignoring SIGPIPE process-wide is the standard, portable fix
+// for any POSIX networked application (works identically on macOS and
+// Linux, unlike SO_NOSIGPIPE which is BSD/macOS-only) -- it turns a
+// broken-pipe write into an ordinary send() failure (errno == EPIPE),
+// which sendAll below already correctly turns into a catchable
+// std::runtime_error.
+struct IgnoreSigpipe {
+  IgnoreSigpipe() { std::signal(SIGPIPE, SIG_IGN); }
+};
+const IgnoreSigpipe kIgnoreSigpipeOnce;
 
 void sendAll(int fd, const void *data, size_t len) {
   const uint8_t *p = static_cast<const uint8_t *>(data);
@@ -120,6 +140,18 @@ void TcpChannel::send(int dst_rank, const void *data, size_t len) {
 
 void TcpChannel::recv(int src_rank, void *data, size_t len) {
   recvAll(fds_.at(src_rank), data, len);
+}
+
+void TcpChannel::shutdownPeer(int peer) {
+  int fd = fds_.at(peer);
+  if (fd >= 0) ::shutdown(fd, SHUT_RD);
+  // SHUT_RD only, deliberately: this is a local-only operation on our
+  // own read side, guaranteed (POSIX) to unblock a concurrent thread
+  // blocked in recv() on this fd by making it return 0 -- without
+  // requiring the peer's cooperation, and without disturbing our own
+  // send() path (a concurrently in-flight send to this peer, e.g. from
+  // the ticker thread mid-heartbeat, must still complete normally; see
+  // raft.cpp's stop()).
 }
 
 std::vector<std::unique_ptr<Channel>> make_tcp_loopback_mesh(int world_size, uint16_t base_port) {

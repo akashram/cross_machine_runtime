@@ -35,6 +35,18 @@ public:
   virtual void recv(int src_rank, void *data, size_t len) = 0;
   virtual int rank() const = 0;
   virtual int world_size() const = 0;
+
+  // Forcibly unblocks any thread currently inside recv(peer, ...), making
+  // it return/throw instead of blocking indefinitely -- without requiring
+  // any cooperation from `peer` (no message needs to arrive). This is a
+  // one-way, local-only operation on the read side of the connection to
+  // `peer`; send() to `peer` remains valid until the Channel itself is
+  // destroyed. Added for raft.cpp's stop(): a caller needing to safely
+  // *join* (not detach) a thread blocked in recv() for a peer that may
+  // never send anything again (e.g. simulating that peer's crash) calls
+  // this first. See raft.cpp's stop() for the motivating bug this fixes
+  // (a detached receiver thread outliving the RaftNode it belongs to).
+  virtual void shutdownPeer(int peer) = 0;
 };
 
 // Real TCP, one persistent full-duplex socket per rank pair. Constructing
@@ -63,6 +75,7 @@ public:
   void recv(int src_rank, void *data, size_t len) override;
   int rank() const override { return rank_; }
   int world_size() const override { return world_size_; }
+  void shutdownPeer(int peer) override;
 
 private:
   int rank_;
