@@ -254,6 +254,7 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - Chandy-Lamport distributed snapshots for consistent global state
 - Chaos engineering harness (`tc netem` for simulated cross-region latency + packet loss, node failure injection)
 - Multi-tenancy: resource quotas, priority preemption, fair scheduling
+- Custom-scheduler-vs-Kubernetes comparison (added 2026-07-29, Phase 16 step 7): this section's `topo_scheduler` and multi-tenancy work built from scratch, directly compared against what Kubernetes' own scheduler + Kueue/Volcano provide out of the box — see Containers / Orchestration below
 
 ## Networking / Transport
 - AWS EFA (Elastic Fabric Adapter): RDMA semantics over AWS's custom fabric via `libfabric` / OFI — same programming model as InfiniBand libibverbs (queue pairs, completion queues, registered memory, one-sided reads/writes, scatter/gather). Concepts transfer directly to InfiniBand; only physical fabric differs.
@@ -361,6 +362,19 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - NPU cost/efficiency profile (added 2026-07-28): FLOPS/Watt-first comparison distinct from the datacenter $/FLOP framing the other four backends use — NPUs aren't cloud-rentable, so this is a device-efficiency comparison, not an instance-cost one
 - Thermal-aware scheduling factoring cloud instance cost
 - Design docs that frame system decisions in business/cost terms
+
+## Containers / Orchestration
+*(Added 2026-07-29, not in the original scope — see Phase 16 in PLAN.md.
+Genuinely cross-cutting, not a new capability domain: touches Phase
+1/2's host-level tuning, Phase 3's GPU access, Phase 5's already-built
+schedulers, and Phase 6/9's distributed training and serving.)*
+- Dockerfile for the portable build subset — the same CPU-portable tree `ci.yml` targets, giving that workflow a real, reproducible environment once it's worth reconciling
+- cgroup/hugepage/CPU-affinity interaction with Phase 1/2's host-level tuning, measured directly (what breaks or needs explicit configuration inside a container, not assumed to "just work")
+- `nvidia-container-toolkit` GPU passthrough — the prerequisite `gpu_engine` needs before it can run containerized on real GPU hardware
+- Kubernetes manifests for `inference_serving`'s `ServingRouter`, autoscaled against the SLA scheduler's latency targets (not raw CPU%)
+- Gang-scheduled manifests (Kubeflow-`PyTorchJob`-style) for Phase 6's distributed training loop — synchronized multi-pod start, a different scheduling problem from single-pod autoscaling
+- Device plugin gap analysis for FPGA/TPU: honest coverage of what's mature (NVIDIA) vs. far less standardized (Xilinx FPGA device plugins)
+- Custom-scheduler-vs-Kubernetes comparison (cross-referenced from Distributed Layer above): a specific, defensible claim about when Phase 5's from-scratch schedulers are still justified vs. reinventing an existing, better-tested wheel
 
 ## Portfolio / Career Deliverables
 - `/docs`: RFCs and ADRs for scheduler, memory model, transport protocol (written as internal Google/Meta design docs)

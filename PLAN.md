@@ -658,6 +658,60 @@ Unlike GPU/FPGA/TPU, there's no straightforward AWS/GCP rental story for NPUs �
 
 ---
 
+## Phase 16: Containerized & Orchestrated Deployment
+**Estimated duration: 1–2 months**
+**Position in sequence:** Added 2026-07-29, not in the original 12-phase
+scope. Unlike Phases 13-15, this one is genuinely cross-cutting rather
+than a new capability domain — it touches Phase 1/2's host-level tuning
+(hugepages, CPU affinity, NUMA), Phase 3's GPU access, Phase 5's
+already-built `multitenancy`/`topo_scheduler` (a from-scratch scheduler
+this phase directly compares against Kubernetes' own), and Phase 6/9's
+distributed training and serving. Motivated by a real, concrete finding
+from reconciling CI (2026-07-29): `ci.yml` had drifted out of sync with
+the tree's actual dependencies for a long stretch with nobody noticing
+until failure emails piled up — a real, working container image is the
+standard fix for "what does this tree actually need to build," not just
+a Kubernetes-deployment concern.
+
+### What to learn first
+- cgroups v2: CPU/memory limits, `cpuset` pinning — how container
+  resource limits interact with Phase 2's CPU-affinity and NUMA-aware
+  work, which assumes it can see and pin to real host cores
+- Hugepages inside containers: why they're a host-level kernel resource
+  that has to be explicitly exposed to a container (volume-mounted
+  `hugetlbfs`), not something `docker run` grants automatically
+- `nvidia-container-toolkit`: how GPU device nodes get exposed into an
+  otherwise-isolated container namespace
+- Kubernetes device plugin framework: the extension point vendors
+  (NVIDIA, Xilinx, Google) use to expose GPU/FPGA/TPU as schedulable
+  resources — understand this before Phase 16 steps 6-7's own gap
+  analysis against it
+- Gang scheduling: why a distributed training job's pods must all start
+  together (not Kubernetes' default one-pod-at-a-time scheduling
+  behavior), and how Kueue/Volcano/Kubeflow's `PyTorchJob` solve it
+
+### Build order
+1. **Dockerfile for the portable build** — multi-stage image building the CPU-portable subset of the tree (everything that already builds without CUDA/MLIR/FPGA/TPU toolchains) — the same subset `ci.yml` targets, giving that stale, dependency-drifted workflow a real, reproducible environment to eventually rebuild against.
+2. **cgroup interaction with Phase 1/2's host-level tuning, measured** — run `cpu_engine`'s affinity/hugepage/NUMA code inside vs. outside a container with default cgroup limits; document concretely what breaks or needs explicit configuration (`--cpuset-cpus`, hugepage volume mounts) rather than assuming it "just works."
+3. **GPU passthrough config** — `nvidia-container-toolkit` setup exposing CUDA to the container, the prerequisite `gpu_engine` needs before it can ever run containerized on real hardware. Hardware-gated like Phase 3 itself.
+4. **Kubernetes manifests for inference serving** — Deployment/Service/HPA wiring `inference_serving/serving_backend`'s `ServingRouter` behind real autoscaling, tied to the SLA scheduler's (Phase 9 step 3) latency targets rather than raw CPU%.
+5. **Gang-scheduled manifests for distributed training** — a Kubeflow-`PyTorchJob`-style (or plain `StatefulSet`-based) multi-pod launch config for Phase 6's training loop, requiring synchronized pod start — a genuinely different scheduling problem from step 4's single-pod autoscaling.
+6. **Device plugin gap analysis for FPGA/TPU** — document how Kubernetes' device-plugin framework would expose Phase 7/8's accelerators to pods; real, honest coverage of what exists (NVIDIA's plugin is mature) vs. what doesn't (Xilinx FPGA device plugins are far less standardized) rather than assuming uniform support.
+7. **Custom schedulers vs. Kubernetes, compared directly** — Phase 5's `topo_scheduler` (topology-aware placement) and `multitenancy` (resource quotas, fair scheduling) were built from scratch; this step is the honest comparison against what Kubernetes' own scheduler plus Kueue/Volcano already provide out of the box — when building your own is actually justified vs. when it's reinventing an existing, better-tested wheel.
+
+### Deliverables
+- A real Dockerfile that builds and runs the portable `ctest` subset inside the container, matching local results
+- Kubernetes manifests, validated (`kubectl apply --dry-run` or an equivalent manifest linter — no real cluster needed for this check)
+- Design doc: "Containerized & Orchestrated Deployment" — covers the cgroup/host-tuning findings and the custom-scheduler-vs-Kubernetes comparison
+
+### Definition of done
+Docker image builds and its containerized `ctest` run matches the local (non-containerized) results exactly. Kubernetes manifests validate cleanly. The cgroup interaction step reports real, measured findings (what needed explicit configuration, not assumed to "just work"). The scheduler comparison makes a specific, defensible claim about when Phase 5's custom schedulers are still justified against Kubernetes' built-in options, not just "ours is more educational."
+
+### Note on what this demonstrates
+Unlike Phases 13-15 (new capability domains), this phase demonstrates production deployment maturity — the gap between "the algorithm works" and "this runs reliably in the environment real workloads actually get deployed into." The Docker step (1-2) is fully local and portable; steps 3, 6 are hardware-gated like the backends they expose; steps 4-5, 7 are cluster-gated (need a real Kubernetes cluster, not just `kubectl` locally) — see CLAUDE.md's execution strategy for where this slots into the hardware validation pass.
+
+---
+
 ## Phase 11: Polish + Portfolio
 **Estimated duration: 1–2 months (ongoing throughout)**
 
