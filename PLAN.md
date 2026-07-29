@@ -472,15 +472,26 @@ Continuous batching achieves > 2x throughput vs. static batching. Speculative de
 8. **Kernel variant generator agent** — given a kernel specification (op type, input shapes, dtype), generates N variants with different tiling/vectorization parameters using Claude API, compiles and benchmarks each, promotes the winner. Documents the search process.
 9. **LLM autotuning agent** — monitors runtime execution traces (latency per op, device utilization, memory pressure), identifies suboptimal placement or quantization decisions, proposes and tests changes. Compares pre- and post-agent optimization baseline.
 
+Steps 10–11 added 2026-07-28, extending the original 9-step scope (same
+treatment as the Minimal Transformer addition after Phase 6). Steps
+7–9's agents use structured output generation — the model returns a
+JSON blob a hand-written parser interprets. That's not the same thing
+as an agent "skill": a real skill is a discoverable, callable, typed
+capability the model itself decides to invoke.
+
+10. **Tool use for the existing agents** — upgrade steps 7–9 from structured-output-only to real Claude tool use: each agent gets a defined set of callable tools (`read_ncu_report(path)`, `run_benchmark(variant)`, `query_cost_model(op, device)`, `apply_placement_override(op, device)`) invoked via the API's tool-use mechanism, not a hand-written JSON parser.
+11. **Skill registry + composable dispatch** — package each of the three capabilities (Nsight analysis, kernel variant generation, LLM autotuning) as a self-contained skill (instructions + tool schema + entry point) behind a lightweight registry; build one orchestrating agent that, given a natural-language request ("why is this kernel slow"), selects which skill(s) to invoke — real composition, not three independent hardcoded scripts.
+
 ### Deliverables
 - eBPF + OpenTelemetry traces for an end-to-end multi-node training run
 - TLC verification reports for all specs
 - Agent demo: show the Nsight analyzer catching a real kernel inefficiency
 - Agent demo: show the kernel variant generator finding a better tiling
+- Agent demo: show the orchestrating agent selecting the right skill for a natural-language request
 - Design doc: "Observability Architecture"
 
 ### Definition of done
-Agents demonstrably find real optimizations, not toy ones. eBPF traces show kernel scheduler and memory events correlated with application-level latency events. All TLC checks pass.
+Agents demonstrably find real optimizations, not toy ones. eBPF traces show kernel scheduler and memory events correlated with application-level latency events. All TLC checks pass. Each agent capability is invokable as a real tool-use skill, not just a structured-output script, and the orchestrating agent correctly selects among them.
 
 ---
 
@@ -533,6 +544,104 @@ GBT matches LightGBM accuracy on OpenML CC-18 and beats it on training throughpu
 
 ### Note on what this demonstrates
 This phase demonstrates ML systems depth and empirical judgment. It does NOT replace: reading the original papers (Breiman 2001 RF, Friedman 2001 GBT, Platt 1998 SMO), studying learning theory, or breadth from diverse real-world problem experience. Read the papers alongside the implementations.
+
+---
+
+## Phase 13: Retrieval-Augmented Generation
+**Estimated duration: 1–2 months**
+**Position in sequence:** Added 2026-07-28, not in the original 12-phase
+scope — same kind of addition as the Minimal Transformer note after
+Phase 6. Builds on `transformer/` (generation), `ml/knn` (Phase 12a step
+5, approximate nearest-neighbor retrieval), and `inference_serving`
+(Phase 9, serving path). All three prerequisites are already
+code-complete.
+
+### Build order
+1. **Embedding model** — repurpose `transformer/`'s attention + LayerNorm stack (no causal mask; add a pooling head) trained with a contrastive (InfoNCE) objective to produce fixed-size document/query embeddings. Real hand-derived backprop, same convention as the base transformer.
+2. **Cosine-similarity ANN retrieval** — extend `ml/knn`'s ball tree to cosine similarity (currently Euclidean-only) as the baseline retrieval index.
+3. **HNSW index** (Malkov & Yashunin 2016) — a more scalable ANN structure for corpus sizes ball tree wasn't designed for; benchmarked against the ball tree baseline on the same corpus.
+4. **Chunking + indexing pipeline** — real text corpus chunking (fixed-size + overlap, or sentence-boundary aware), embed each chunk via step 1, build the index from step 2/3.
+5. **Retrieval-augmented prompt construction** — given a query, embed it, retrieve top-k chunks, construct an augmented context window, feed into `transformer/`'s existing causal generation path.
+6. **Recall@k measurement** — measured against a real relevance-labeled query set, not just "the index runs."
+7. **Generation quality with vs. without retrieval** — perplexity / held-out QA-style comparison: does retrieval measurably help the base transformer answer questions it can't from training data alone? A real, honest finding either way.
+8. **Approximate vs. exact retrieval, system-level** — does `knn`'s already-established recall/speed tradeoff (see `ml/knn/README.md`) actually degrade end-task generation quality, or is the imperfect recall "free" at the system level? Direct extension of that module's own findings.
+9. **Serving integration** — wire the retrieval + generation pipeline into `inference_serving/serving_backend`'s `ServingRouter` as a new request path.
+
+### Deliverables
+- A real embedding model + ANN index, measured recall@k
+- End-to-end RAG pipeline serving through the existing `ServingRouter`
+- Design doc: "Retrieval-Augmented Generation" — covers the recall/latency/quality tradeoffs measured in steps 6–8
+
+### Definition of done
+Recall@k measured above a documented threshold on a real retrieval benchmark. Generation quality with retrieval is measurably compared against without retrieval (improvement not assumed, measured). Approximate-retrieval's effect on end-task quality is measured directly, not inferred from `knn`'s standalone recall numbers.
+
+### Note on what this demonstrates
+This phase demonstrates that RAG is a composition of existing capabilities (embedding, ANN search, generation, serving), not a separate system — the same "no toy re-implementation" standard the rest of the project holds. No new hardware dependency: fully CPU-portable, same as Phases 9/10/12.
+
+---
+
+## Phase 14: Adversarial Robustness
+**Estimated duration: 1 month**
+**Position in sequence:** Added 2026-07-28, not in the original 12-phase
+scope. Builds on `transformer/`, the autograd engine, and
+`distributed_training/full_training_loop` (all Phase 6, already
+code-complete) — the same relationship SFT/reward-model/PPO/DPO (Phase 6
+steps 22–25) have to the base transformer.
+
+### Build order
+1. **Gradients w.r.t. input** — extend the autograd engine to expose gradients of loss with respect to input embeddings, not just weights (a real, scoped addition; weight gradients are already fully implemented).
+2. **FGSM** (Goodfellow et al. 2014) — Fast Gradient Sign Method: perturb the input by `epsilon * sign(gradient)` to maximize loss, using step 1's input gradients.
+3. **PGD** (Madry et al. 2017) — the stronger iterative attack: multiple FGSM-style steps with projection back into an epsilon-ball around the original input. The standard "strong enough to trust a defense against" attack.
+4. **Undefended vulnerability measurement** — measure accuracy collapse of the trained (undefended) transformer under FGSM/PGD at varying epsilon. The real baseline the rest of the phase is measured against.
+5. **Adversarial training defense** (Madry et al.'s min-max formulation) — replace or augment each training batch with PGD-perturbed examples; reuses `full_training_loop` with a modified batch-construction step.
+6. **Robustness/accuracy tradeoff curve** — measure clean accuracy of the adversarially-trained model vs. the undefended model, and robust accuracy under attack for both. The well-documented real phenomenon (Tsipras et al. 2018, "Robustness May Be at Odds with Accuracy") — measured here, not cited and assumed.
+7. **Transferability study** — do adversarial examples crafted against one model transfer to fool a differently-sized/differently-trained model? Real, measured cross-model transfer rate.
+8. **Randomized smoothing** (Cohen et al. 2019, stretch goal) — a certified (probabilistic-guarantee) defense, a structurally different approach from PGD-based empirical defense; honest scope note if not reached.
+
+### Deliverables
+- Measured accuracy-collapse curve for the undefended model under FGSM/PGD
+- Measured robustness/accuracy tradeoff for the adversarially-trained model
+- Design doc: "Adversarial Robustness" — covers the tradeoff measurements and the transferability finding
+
+### Definition of done
+FGSM and PGD attacks measurably degrade the undefended model's accuracy. Adversarial training measurably improves robust accuracy at a measured (not assumed) clean-accuracy cost. Transfer rate between differently-sized models is measured directly.
+
+### Note on what this demonstrates
+Same standard as Phase 6's RLHF/DPO steps: real training-loop modifications with measured, sometimes uncomfortable tradeoffs (robustness costing clean accuracy is the headline finding here, not a footnote). No new hardware dependency: fully CPU-portable.
+
+---
+
+## Phase 15: NPU Backend
+**Estimated duration: 1–2 months**
+**Position in sequence:** Added 2026-07-28, not in the original 12-phase
+scope. Mirrors the structure of Phase 3 (GPU), Phase 7 (FPGA), and Phase
+8 (TPU) — a hardware-gated accelerator backend, code-complete locally
+with hardware validation deferred. Lives in `npu_engine/`.
+
+### What to learn first
+- NPU architecture: fixed-function matrix/convolution engines, typically INT8/INT4-dominant, no general-purpose control flow the way a GPU SM has
+- Why NPUs target inference, not training: no (or extremely limited) backward-pass/gradient support in most commercial NPU toolchains
+- The restricted operator model: why NPU compilers (CoreML, ONNX Runtime NPU execution providers) fall back to CPU/GPU for unsupported ops, and what that means for a placement pass
+
+### Build order
+1. **Toolchain validation** — CoreML (Apple ANE) or ONNX Runtime NPU execution provider setup; a trivial op run on real hardware. Hardware-gated like Phase 3/7/8's first steps.
+2. **Quantization export pipeline** — export a trained model to INT8 via `inference_serving/gptq`'s existing Hessian-guided quantization (direct reuse, not a re-implementation), in ONNX/CoreML format for NPU deployment.
+3. **NPU vs. CPU vs. GPU cost-comparison model** — portable, run locally, same "model + hardware-gated kernel" split as `tpu_engine/cost_model` and `fpga_engine/vitis_ai`'s `dpu_vs_custom_model.cpp`.
+4. **Operator coverage analysis** — a real, honest study of which of `compiler/dialect`'s ops are NPU-deployable given the restricted op set (conv/matmul/quantized elementwise; not arbitrary control flow), directly informing step 6.
+5. **Power/thermal modeling** — mirrors `fpga_engine/thermal_router`'s real thermal-response model; NPUs are power-efficiency-first hardware, on-theme for this pattern.
+6. **Cost model + placement pass integration** — add NPU as a device in `compiler/cost_model/CostModel` (INT8 TOPS, memory bandwidth, transfer cost, launch overhead) and extend `compiler/placement/PlacementPass`'s per-op device eligibility to exclude NPU for ops outside step 4's supported set — the placement pass currently treats every op as eligible on every device uniformly; NPU is the first backend that genuinely breaks that assumption.
+7. **ServingRouter integration** — register NPU as a backend in `inference_serving/serving_backend`'s `ServingRouter` (`available=false` + reason string until hardware-validated, matching the existing GPU/FPGA/TPU convention).
+
+### Deliverables
+- Portable NPU vs. CPU vs. GPU cost-comparison model with real numbers
+- NPU registered in both the compiler's placement pass and the serving router
+- Design doc: "NPU Backend" — covers the restricted-operator-model finding and its effect on placement eligibility
+
+### Definition of done
+NPU is a real, code-complete device option in both `compiler/placement` and `ServingRouter`, with a documented op-eligibility restriction (not silently treated the same as GPU/CPU). Portable cost-comparison model run locally with real numbers.
+
+### Hardware access note
+Unlike GPU/FPGA/TPU, there's no straightforward AWS/GCP rental story for NPUs — they're edge/mobile hardware (Apple ANE, Qualcomm Hexagon, Google Coral). Hardware validation more likely means a ~$60 Coral USB Accelerator or an Apple Silicon Mac than a cloud instance — documented honestly here rather than forced into the existing cloud-rental pattern (see the hardware table in CLAUDE.md).
 
 ---
 

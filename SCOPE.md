@@ -123,6 +123,14 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - XLA HLO (High Level Operations): the IR that sits between frameworks and TPU hardware — understand how it maps to systolic array operations
 - Profiling: Google Cloud TPU profiler, identifying MXU utilization, HBM bandwidth saturation, ICI contention
 
+## Hardware Architecture — NPU
+*(Added 2026-07-28, not in the original scope — see Phase 15 in PLAN.md.)*
+- Fixed-function matrix/convolution engines: dedicated silicon for conv/matmul, not general-purpose SIMT or systolic-array-for-everything the way GPU/TPU are
+- INT8/INT4-dominant execution: unlike GPU/TPU's FP32/BF16-first design, NPUs are built around quantized inference from the start
+- Why NPUs are inference-only in practice: no (or extremely limited) backward-pass support in commercial NPU toolchains — contrast with GPU/TPU, which train and infer
+- The restricted operator model: NPU compilers (CoreML, ONNX Runtime NPU execution providers) support a narrow op subset and fall back to CPU/GPU for anything else — the architectural reason a placement pass can't treat NPU like every other device
+- Power/area efficiency as the design center: NPUs trade peak FLOPS (which GPU/TPU win on) for FLOPS/Watt at the edge — the opposite optimization target from Phase 3/8's datacenter accelerators
+
 ## CPU Backend
 - AVX-512 vectorized kernels, manual SIMD intrinsics
 - Cache-line aligned buffers, no heap allocs on hot path
@@ -194,6 +202,15 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - Integration with unified tensor handle and topology-aware scheduler
 - TPU added to cost model: $/FLOP and FLOPS/Watt vs. GPU and FPGA
 
+## NPU Backend
+*(Added 2026-07-28, not in the original scope — see Phase 15 in PLAN.md.)*
+- CoreML (Apple ANE) or ONNX Runtime NPU execution provider as the toolchain interface
+- Quantization export pipeline reusing `inference_serving/gptq`'s Hessian-guided INT8 quantization (Phase 9), not a re-implementation
+- Operator coverage analysis: which ops in `compiler/dialect` are NPU-deployable given the restricted op set, feeding directly into placement-pass device eligibility
+- NPU vs. CPU vs. GPU cost-comparison model, same "portable model + hardware-gated kernel" convention as `tpu_engine/cost_model` and `fpga_engine/vitis_ai`
+- Power/thermal modeling mirroring `fpga_engine/thermal_router`'s real thermal-response model
+- Hardware access note: no straightforward AWS/GCP rental story (edge/mobile hardware) — validation more likely means a Coral USB Accelerator or Apple Silicon Mac than a cloud instance
+
 ## Compiler / IR
 - MLIR dialect design + lowering pipeline (not custom toy IR)
 - MLIR Affine dialect / polyhedral model for loop optimization (tiling, interchange, fusion)
@@ -204,6 +221,7 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - Auto-sharding / GSPMD-style tensor placement (cost-model-driven)
 - AOT compilation of execution graphs to native code
 - Cost model for device placement decisions
+- NPU device eligibility in the placement pass: unlike CPU/GPU/FPGA/TPU (currently treated as uniformly eligible for every op), NPU's restricted operator model requires real per-op device-candidate filtering — added 2026-07-28 alongside Phase 15
 
 ## Memory Subsystem
 - Unified tensor handle: device-local, pinned host, shared, FPGA DMA buffers, remote/distributed
@@ -274,6 +292,17 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - PPO-based RLHF: policy (SFT init) + critic (reward model) + KL penalty against frozen reference model, clip ratio, reward vs. KL divergence tradeoff measured across training, reward hacking monitored
 - DPO (Direct Preference Optimization): offline alternative to PPO — optimize policy directly on preference pairs without a reward model; convergence speed and final reward compared vs. PPO baseline on identical preference data; documented decision guide for when to prefer each
 
+## Adversarial Robustness
+*(Added 2026-07-28, not in the original scope — see Phase 14 in PLAN.md.)*
+- Input gradients: extending the autograd engine to expose gradients w.r.t. input embeddings, not just weights
+- FGSM (Goodfellow et al. 2014): single-step gradient-sign attack
+- PGD (Madry et al. 2017): multi-step projected attack, the standard strong-attack baseline
+- Undefended-model vulnerability measurement: accuracy collapse under attack at varying epsilon
+- Adversarial training (Madry et al.'s min-max formulation): PGD-perturbed batches folded into `full_training_loop`
+- Robustness/accuracy tradeoff measurement (Tsipras et al. 2018): clean vs. robust accuracy, measured not assumed
+- Cross-model transferability of adversarial examples
+- Randomized smoothing (Cohen et al. 2019, stretch): certified robustness as a structurally different alternative to empirical PGD defense
+
 ## Inference Serving Layer
 - Continuous batching
 - Paged KV cache management (vLLM-style)
@@ -282,6 +311,18 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - GPTQ / INT4 quantization: weight-only INT4 with per-group scales — dominant LLM inference quantization method, measured perplexity vs. throughput tradeoff against FP8 baseline
 - FlashDecoding: parallelizes KV cache access across sequence dimension during autoregressive decoding — distinct from Flash Attention forward pass, measured latency improvement for long-context inference
 - LLM autotuning agent (final phase: after pre-AI optimized baseline exists)
+- NPU as a fifth `ServingRouter` backend (added 2026-07-28 alongside Phase 15), `available=false` + reason string until hardware-validated, matching the existing GPU/FPGA/TPU convention
+
+## Retrieval-Augmented Generation
+*(Added 2026-07-28, not in the original scope — see Phase 13 in PLAN.md.)*
+- Embedding model: `transformer/`'s attention + LayerNorm stack repurposed with a pooling head, trained with a contrastive (InfoNCE) objective
+- Cosine-similarity extension to `ml/knn`'s ball tree (currently Euclidean-only) as the baseline retrieval index
+- HNSW (Malkov & Yashunin 2016) as a more scalable ANN index for larger corpora, benchmarked against the ball tree baseline
+- Chunking + indexing pipeline over a real text corpus
+- Recall@k measured against a real relevance-labeled query set
+- Generation quality with vs. without retrieval, measured (perplexity / held-out QA), not assumed to help
+- System-level approximate-vs-exact retrieval tradeoff: does `knn`'s established recall/speed tradeoff actually affect end-task generation quality
+- Serving integration through the existing `ServingRouter`
 
 ## Observability / Profiling
 - eBPF: kernel scheduler, network stack, memory subsystem probes
@@ -309,11 +350,14 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - Nsight profile analyzer agent: ingests Nsight export, outputs ranked optimization suggestions, runs in CI
 - Kernel variant generator agent: generates + benchmarks CUDA tiling/vectorization variants automatically
 - LLM autotuning agent (end phase): observes runtime stats, adjusts placement/quantization decisions
+- Tool use / agent skills (added 2026-07-28, Phase 10 steps 10–11): upgrade the three agents above from structured-output generation to real Claude tool use — callable, typed tools rather than a JSON blob a hand-written parser interprets
+- Skill registry + composable dispatch: each agent capability packaged as a self-contained skill (instructions + tool schema + entry point); one orchestrating agent selects which skill(s) to invoke for a natural-language request
 
 ## Cost / Management Layer
 - Cost model: FLOPS/$ and FLOPS/Watt per device type
 - AWS instance cost analysis: F2 vs. GPU instance tradeoffs per workload
-- GCP TPU cost analysis: TPU v4/v5 vs. GPU instance tradeoffs per workload — $/FLOP and FLOPS/Watt comparison across all four backends (CPU, GPU, FPGA, TPU)
+- GCP TPU cost analysis: TPU v4/v5 vs. GPU instance tradeoffs per workload — $/FLOP and FLOPS/Watt comparison across all five backends (CPU, GPU, FPGA, TPU, NPU)
+- NPU cost/efficiency profile (added 2026-07-28): FLOPS/Watt-first comparison distinct from the datacenter $/FLOP framing the other four backends use — NPUs aren't cloud-rentable, so this is a device-efficiency comparison, not an instance-cost one
 - Thermal-aware scheduling factoring cloud instance cost
 - Design docs that frame system decisions in business/cost terms
 
