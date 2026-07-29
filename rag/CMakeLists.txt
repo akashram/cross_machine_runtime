@@ -5,3 +5,4 @@
 # already code-complete. No CUDA/Linux/MLIR dependency for any step.
 
 add_subdirectory(embedding_model)
+add_subdirectory(hnsw)
