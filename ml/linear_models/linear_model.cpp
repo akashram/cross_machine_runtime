@@ -28,32 +28,47 @@ float LinearModel::predict_raw(const std::vector<float>& x, const std::vector<fl
 void LinearModel::fit(const Features& X, const Labels& y) {
     weights_.assign(X[0].size(), 0.0f);
     bias_ = 0.0f;
+    step_ = 0;
     if (params_.optimizer == LinearOptimizer::SGD)
         fit_sgd(X, y);
     else
         fit_lbfgs(X, y);
 }
 
+void LinearModel::partial_fit(const Features& X, const Labels& y, int n_epochs) {
+    if (params_.optimizer != LinearOptimizer::SGD) return;  // documented no-op; see header's Design note
+    if (weights_.empty()) weights_.assign(X[0].size(), 0.0f);  // first call on a freshly-constructed model
+    run_sgd_epochs(X, y, n_epochs);
+}
+
+void LinearModel::set_weights(const std::vector<float>& weights, float bias) {
+    weights_ = weights;
+    bias_ = bias;
+}
+
+void LinearModel::fit_sgd(const Features& X, const Labels& y) { run_sgd_epochs(X, y, params_.max_iter); }
+
 // Proximal (ISTA-style) elastic-net SGD: each step takes an ordinary
 // gradient step on the smooth part (data loss + L2 term), then applies
 // soft-thresholding for the L1 term -- the standard way to handle SGD
 // with a non-differentiable-at-zero L1 penalty (what sklearn's
-// SGDClassifier/Regressor do under penalty='elasticnet').
-void LinearModel::fit_sgd(const Features& X, const Labels& y) {
+// SGDClassifier/Regressor do under penalty='elasticnet'). Operates on
+// the CURRENT weights_/bias_/step_ -- fit() resets them first (a fresh
+// fit), partial_fit() doesn't (a warm-started continuation).
+void LinearModel::run_sgd_epochs(const Features& X, const Labels& y, int n_epochs) {
     std::size_t n = X.size(), d = X[0].size();
     std::vector<std::size_t> order(n);
     std::iota(order.begin(), order.end(), 0);
-    std::mt19937 rng(params_.random_state);
+    std::mt19937 rng(params_.random_state + static_cast<unsigned>(step_));  // vary the shuffle across warm-started calls
 
     float l2 = params_.alpha * (1.0f - params_.l1_ratio);
     float l1 = params_.alpha * params_.l1_ratio;
 
-    int step = 0;
-    for (int epoch = 0; epoch < params_.max_iter; ++epoch) {
+    for (int epoch = 0; epoch < n_epochs; ++epoch) {
         std::shuffle(order.begin(), order.end(), rng);
         for (std::size_t idx : order) {
-            float eta = params_.learning_rate / (1.0f + 0.0001f * static_cast<float>(step));
-            ++step;
+            float eta = params_.learning_rate / (1.0f + 0.0001f * static_cast<float>(step_));
+            ++step_;
 
             const auto& x = X[idx];
             float raw = predict_raw(x, weights_, bias_);
