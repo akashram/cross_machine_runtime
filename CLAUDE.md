@@ -402,13 +402,80 @@ per-step status table.
 Phase 10 is now fully code-complete (9/9); hardware/toolchain validation
 (steps 1, 4, the AI agents' real API calls, step 8's GPU half, chaos's
 remaining scenario) is deferred along with the earlier phases (see
-execution strategy below). Next local-implementation phase: Phase 12
-(Machine Learning Library), currently stubbed — the last phase in the
-local implementation order.
+execution strategy below).
 
-**Phase 12 — STUBBED, pending full local implementation**
-Stub directories, interface headers, CMakeLists.txt, and README.md design
-outlines exist. Code bodies are still 1–3 line TODOs.
+**Phase 12: Machine Learning Library — CODE COMPLETE (18/18 steps, 2026-07-28)**
+Lives in `ml/`. Unlike Phases 3/4/7/8 (hardware-gated) but like Phases
+9/10, every step here has no GPU/FPGA/TPU dependency at all, so all
+18 steps are **actually compiled, run, and tested on this Mac**, real
+captured output in each step's own README.
+
+**Phase 12a: Classical ML (8/8)** — `decision_tree` (CART, Gini/entropy,
+per-node feature subsampling for step 2's reuse), `random_forest`
+(bagging, OOB error, permutation importance, `foundation`'s work-
+stealing pool), `gradient_boosting` (Friedman 2001 Newton-step GBT),
+`svm` (Platt 1998 simplified SMO, binary; `decision_function()` added
+during Phase 12b for one-vs-rest wrapping), `knn` (KD-tree exact +
+ball-tree exact/approximate, branch-and-bound verified against brute
+force), `kmeans` (k-means++ measured ~24x lower inertia than random
+init on 25 seeds), `pca` (randomized SVD, Halko et al. 2011; internal
+linear algebra runs in `double` — see Phase 12b), `linear_models` (SGD
+elastic-net + L-BFGS, `LinearModel::partial_fit`/`set_weights` added
+during Phase 12c for PBT's warm-start). Every algorithm's own README
+has real measured findings (bias-variance curves, sparsity effects,
+failure-mode-adjacent behavior), not just "it runs."
+
+**Phase 12b: Decision Framework + Benchmarks (6/6)** — `openml_bench`
+fetches real datasets from the live OpenML REST API (`study/99` is the
+actual CC-18 suite listing), selects and commits 8 of the 72 by size for
+tractability, and runs all 6 supervised algorithms (KMeans/PCA excluded
+as unsupervised) via a hand-written ARFF loader, no Python/sklearn
+dependency; `cross_method` and `decision_criteria` are written analyses
+grounded in those real numbers; `hyperparam_sensitivity` sweeps one
+hyperparameter per algorithm against real data and **found and fixed a
+real bug**: PCA's `explained_variance_ratio_` summed above 1.0 on
+`wdbc`'s ill-conditioned raw features from float32 precision loss during
+randomized-SVD power iterations — fixed by moving `pca.cpp`'s internal
+linear algebra to `double` (public API unchanged, zero test
+regressions); `ensemble` proves the diversity claim exactly on synthetic
+data (disjoint-error models → 100% from 66.7%-accurate members) and
+finds real-data nuance (naive majority voting can hurt a diverse
+ensemble with unequal-strength members; a learned meta-model is more
+robust); `failure_modes` demonstrates one concrete, measured failure per
+algorithm (RF on imbalanced classes, GBT fitting label noise, SVM's
+O(n²) scaling, KNN's curse of dimensionality, KMeans on non-convex
+clusters, PCA discarding a low-variance discriminative direction,
+DecisionTree instability, LinearModel on XOR).
+
+**Phase 12c: Hyperparameter Optimization (4/4)** — `bayesian_opt` (exact
+GP regression, Cholesky-based, `double`-precision internals; EI/UCB),
+`tpe` (per-dimension Parzen-window density estimates, Bergstra et al.
+2011 bandwidth heuristic), `hyperband` (Successive Halving + Li et al.
+2016 bracket generation + Li et al. 2018 ASHA — **found and fixed a
+real bug**: a rung with only 1 evaluated config would trivially
+"promote" itself as top-1/eta of a group of one, fixed by requiring at
+least `eta` results at a rung first, re-verified against a hand-
+computable 4-config scenario with a known answer), `pbt` (Jaderberg et
+al. 2017 truncation selection, backed by a genuine warm-start — added
+`LinearModel::partial_fit`/`set_weights` rather than simulating
+continuation). All four verify their core mechanism correct on
+controlled synthetic cases (GP/EI/UCB monotonicity, TPE density/sampling
+concentration, ASHA's exact promotion count, PBT's non-decreasing-best
+invariant) and all four **independently find the same honest, real
+result** on this repo's actual OpenML hyperparameter-tuning tasks: none
+reliably beats a much simpler baseline (random search, or for PBT,
+"random search without mid-training adaptation") — consistent with
+Bergstra & Bengio 2012's published finding that random search is a
+strong baseline on low-dimensional, wide-optimum landscapes, and
+consistent with `cross_method`'s own finding that these particular real
+datasets have accuracy ceilings algorithm/hyperparameter sophistication
+doesn't move. Documented as a real, disclosed property of the datasets,
+not papered over.
+
+Phase 12 is now fully code-complete (18/18). **This completes every
+phase in the local implementation order (1→2→3→4→5→6→7→8→9→10→12)** —
+see the execution strategy below for what's next (the hardware
+validation pass, in the same phase order, one hardware type at a time).
 
 ---
 
@@ -424,12 +491,17 @@ component), so the actual algorithms get written now, locally, and cloud
 hardware is used purely for benchmarking/tuning what already works on paper.
 
 **Local implementation order: PLAN.md phase order (1 → 2 → 3 → 4 → 5 → 6 → 7
-→ 8 → 9 → 10 → 12).** Phases 1–3 are done (Phase 3 is code-complete, not yet
-hardware-validated). Next is Phase 4, then 5, 6, 7, 8, 9, 10, 12 in sequence.
-Within each phase, implement step by step in PLAN.md's build order. A step
-counts as implemented when it has real logic (not a stub) and compiles
-wherever it can without the target hardware; benchmark numbers stay TODO
-until the hardware validation pass.
+→ 8 → 9 → 10 → 12).** All of it is now code-complete (2026-07-28) — Phases
+1, 2, 5 (partially), 6, 9, 10, 12 are also locally run with real captured
+numbers; Phases 3, 4, 7, 8, and the remaining gated pieces of 5 are
+code-complete but hardware-gated (see each phase's own status above).
+Within each phase, implementation went step by step in PLAN.md's build
+order. A step counts as implemented when it has real logic (not a stub)
+and compiles wherever it can without the target hardware; benchmark
+numbers stay TODO until the hardware validation pass.
+
+**Next up: the hardware validation pass below** — no further local
+implementation work remains in the phase order above.
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
