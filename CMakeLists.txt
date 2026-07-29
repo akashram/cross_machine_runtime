@@ -51,3 +51,7 @@ add_subdirectory(tpu_engine)
 add_subdirectory(inference_serving)
 add_subdirectory(observability)
 add_subdirectory(ml)
+
+# Phase 13: Retrieval-Augmented Generation — depends on transformer, ml/knn,
+# inference_serving; all portable, no gate needed.
+add_subdirectory(rag)
