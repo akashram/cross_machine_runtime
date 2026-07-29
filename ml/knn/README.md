@@ -11,6 +11,11 @@ don't depend on it.**
 PLAN.md Phase 12a step 5: k-NN via a KD-tree (exact) and a ball tree
 (approximate), SIMD distance computation.
 
+This directory also holds PLAN.md **Phase 13 step 2** (`cosine_ann.h/.cpp`,
+`cosine_ann_test.cpp`): cosine-similarity ANN retrieval for
+`rag/`'s embedding vectors, built as a thin wrapper around this file's own
+`BallTree` — see the dedicated "cosine_ann" section below.
+
 ## Design
 
 - `squared_distance()`: a single linear pass over contiguous float
@@ -103,3 +108,68 @@ None for the algorithm itself, correctness, or parameter-effect results
 above. Real dataset comparison against sklearn on OpenML CC-18 needs the
 deferred Python + `scikit-learn` + dataset-fetch install (tracked in
 project memory alongside the JAX/Java/LightGBM deferrals).
+
+---
+
+## cosine_ann (PLAN.md Phase 13 step 2)
+
+**Status: code-complete AND locally run — pure CPU, no external
+dependency.**
+
+### What this measures
+
+"Extend ml/knn's ball tree to cosine similarity (currently
+Euclidean-only)" — the baseline retrieval index `rag/`'s embedding vectors
+(Phase 13 step 1, always L2-normalized) get searched against.
+
+### Design
+
+`CosineBallTree` is a thin wrapper around `BallTree` above, not a modified
+copy of it — composition, matching Phase 13's own "RAG is a composition of
+existing capabilities" framing. The trick (standard, but verified directly
+here rather than just asserted): for **unit** vectors,
+`||a-b||^2 = 2 - 2*cos(a,b)`, so ranking by squared Euclidean distance
+after L2-normalizing every vector produces *exactly* the same order as
+ranking by cosine similarity. `CosineBallTree` normalizes every point once
+at construction and the query once per call, then delegates to
+`BallTree::query_knn` completely unchanged — no new pruning logic, no new
+correctness argument, just a change of coordinates. `query_knn` converts
+the underlying (normalized-space) squared distance back to a cosine
+similarity value for the caller (`1 - dist_sq/2`).
+
+### Results (captured 2026-07-29, Apple clang 14 / `-std=c++2b`, this Mac)
+
+```
+PASS  cosine_similarity of parallel (same-direction) vectors is 1.0
+PASS  cosine_similarity of orthogonal vectors is 0.0
+PASS  cosine_similarity of opposite-direction vectors is -1.0
+  CosineBallTree: 0/20 queries mismatched brute-force cosine ranking; 0/100 similarity values off
+PASS  CosineBallTree's exact mode finds the same top-k as brute-force cosine similarity
+PASS  CosineBallTree reports the correct cosine similarity value, not just the correct order
+  CosineBallTree defeatist: recall=0.600 vs exact, avg nodes visited exact=11.2 approx=6.2
+PASS  defeatist cosine search actually misses some true neighbors (a genuine approximation)
+PASS  defeatist cosine search still finds a nontrivial fraction of true neighbors
+PASS  defeatist cosine search visits fewer nodes than exact backtracking search
+PASS
+```
+
+### Findings
+
+- The monotonic-transform equivalence is exact, not approximate: 0/20
+  queries had a different top-5 SET than brute-force cosine ranking, and
+  0/100 reported similarity VALUES were off by more than 1e-4 from direct
+  cosine similarity on the original (unnormalized) vectors — confirms
+  `CosineBallTree` isn't just "close enough," it's mathematically the same
+  ranking, reusing `BallTree`'s already-proven exactness argument for free.
+- The approximate (defeatist) mode's recall/speed tradeoff carries over
+  from plain `BallTree` largely unchanged in shape: 6.2 avg nodes visited
+  vs. 11.2 for exact (~1.8x fewer) at 60.0% recall on 5 well-separated
+  12-D clusters — same qualitative "real tradeoff, not free" finding
+  `knn/README.md`'s own defeatist-mode section documents, now confirmed to
+  hold under the cosine metric too, not just Euclidean.
+- This is the retrieval index `indexing_pipeline` (step 4) and
+  `recall_eval` (step 6) build on directly — no separate ranking logic to
+  keep in sync with `rag/embedding_model`'s L2-normalized output.
+
+### Hardware notes
+None — pure CPU, same as `BallTree` itself.
