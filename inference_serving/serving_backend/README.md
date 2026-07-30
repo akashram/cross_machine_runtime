@@ -51,6 +51,70 @@ PASS  router's CPU backend produces identical output to direct greedy generation
 PASS
 ```
 
+## serving_daemon — the real long-running process (added 2026-07-30)
+
+`k8s/serving/deployment.yaml` (Phase 16 step 4) was written to point at
+"the serving process" before one actually existed — `ServingRouter`
+previously only lived inside `serving_router_test.cpp`'s `main()`, which
+runs a fixed set of assertions and exits. `serving_daemon.cpp` closes that
+gap: a real, long-running process.
+
+- Trains the same tiny transformer `transformer_test.cpp`'s
+  `test_trains_and_generates()` validates (identical corpus/config/
+  training loop — a known-good recipe, not a new untested one), then
+  builds a `ServingRouter` the same way `serving_router_test.cpp` does
+  (CPU real and available, GPU/FPGA/TPU registered `available=false`).
+- Opens a real TCP listening socket (`SERVING_PORT` env var, default
+  8080) and serves a deliberately minimal line protocol: one line of
+  plain text in (a prompt), one line of greedy-generated text back —
+  proving the process/socket/routing model works, not building a
+  production wire format.
+- Guards against a real bug found while testing this: `model_forward`
+  indexes positional embeddings by absolute sequence position with no
+  bounds check beyond an `assert()` (a process abort, not a catchable
+  exception) once position >= `max_seq_len`. A prompt long enough that
+  `prompt.size() + max_new_tokens > max_seq_len` used to take the whole
+  daemon down on the first oversized request. Fixed by clamping
+  `max_new_tokens` per-request to what still fits, and rejecting
+  (cleanly, per-connection, not process-fatal) any prompt that's already
+  at or past `max_seq_len` on its own. `max_seq_len` was also bumped
+  32 -> 64 for headroom beyond the 21-character training corpus.
+- Handles `SIGTERM`/`SIGINT` via a `select()`-with-timeout accept loop
+  (checked every 1s) instead of blocking in `accept()` forever — a K8s
+  pod gets `SIGTERM` before `SIGKILL` on shutdown, and this exits cleanly
+  within that grace period rather than being forcibly killed mid-request.
+
+### Real transcript (captured 2026-07-30, this Mac, `SERVING_PORT=18081 SERVING_MAX_NEW_TOKENS=20`)
+
+```
+$ printf "the quick fox " | nc -w 5 127.0.0.1 18081
+the quick fox jumps qumps qu qux j
+
+$ printf "the " | nc -w 5 127.0.0.1 18081
+the quick fox jumps qump
+
+$ printf "xyz123" | nc -w 5 127.0.0.1 18081
+ERROR: CharTokenizer::encode: character not in vocabulary
+
+$ python3 -c "print('the quick fox jumps ' * 5, end='')" | nc -w 5 127.0.0.1 18081
+ERROR: prompt too long for this model's max_seq_len
+
+# daemon still alive after both error requests (pgrep confirms one process)
+$ kill -TERM <pid>
+# server log:
+serving_daemon: training demo model on corpus "the quick fox jumps "...
+serving_daemon: model trained, router ready (CPU available; GPU/FPGA/TPU registered unavailable)
+serving_daemon: listening on 0.0.0.0:18081 (max_new_tokens=20)
+serving_daemon: shutting down cleanly
+```
+
+The generated continuation past "jumps " degrades (`qumps qu qux j`) since
+that's beyond what a 400-epoch fit on a 21-character corpus actually
+memorized — expected, and not the point of this test: the point is a real
+process, real socket, real router dispatch, and a real trained model
+round-tripping correctly, including the two error paths staying
+non-fatal to the process.
+
 ## Hardware notes
 - GPU: only added by the build when a CUDA toolchain is present (not the
   case here — see `flash_decoding/README.md`'s identical gate).

@@ -14,5 +14,12 @@ add_executable(serving_router_test serving_router_test.cpp)
 target_link_libraries(serving_router_test PRIVATE ServingRouter)
 set_project_warnings(serving_router_test)
 
+# Real long-running process closing the gap Phase 16's K8s manifests
+# disclosed: k8s/serving/deployment.yaml needs an actual binary to run,
+# not just the ServingRouter library the unit test links against.
+add_executable(serving_daemon serving_daemon.cpp)
+target_link_libraries(serving_daemon PRIVATE ServingRouter)
+set_project_warnings(serving_daemon)
+
 enable_testing()
 add_test(NAME serving_router_test COMMAND serving_router_test)
