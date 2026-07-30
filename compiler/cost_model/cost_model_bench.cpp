@@ -21,6 +21,7 @@ const char* deviceName(DeviceType d) {
         case DeviceType::GPU: return "GPU";
         case DeviceType::FPGA: return "FPGA";
         case DeviceType::TPU: return "TPU";
+        case DeviceType::NPU: return "NPU";
     }
     return "?";
 }
@@ -38,7 +39,7 @@ int main() {
         {"transfer 64MB",               OpType::Transfer,    {1, 4096, 4096, 0}},
     };
     std::vector<DeviceType> devices = {DeviceType::CPU, DeviceType::GPU,
-                                        DeviceType::FPGA, DeviceType::TPU};
+                                        DeviceType::FPGA, DeviceType::TPU, DeviceType::NPU};
 
     std::printf("%-32s", "workload");
     for (DeviceType d : devices) std::printf("%12s (us)", deviceName(d));

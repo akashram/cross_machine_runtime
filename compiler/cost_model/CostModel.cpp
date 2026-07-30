@@ -39,6 +39,21 @@ DeviceCost get_device_cost(DeviceType device) {
             // header TODO), ~1200 GB/s HBM, systolic array fill/drain
             // adds meaningful fixed latency per op.
             return {275.0e12, 1200.0, 10.0, 100.0, 100.0}; // ICI, not PCIe
+        case DeviceType::NPU:
+            // Phase 15 step 6: representative edge NPU (Apple ANE-class),
+            // same order-of-magnitude figures npu_engine/cost_model's own
+            // INT8-TOPS model uses (~15.8 TOPS INT8 there), converted to
+            // this struct's FP32-equivalent-FLOPS slot (see header TODO —
+            // this is the same dtype-unaware approximation TPU's bf16
+            // figure above already makes, not a new one). Memory
+            // bandwidth is a mobile/edge SoC's shared LPDDR figure, far
+            // below a datacenter accelerator's HBM; dispatch overhead is
+            // the lowest of any device here (no OS-mediated kernel launch
+            // queue — see npu_engine/cost_model/README.md's finding);
+            // transfer is host<->device in the trivial sense of "same
+            // package," so a nominal low-latency figure, not a real PCIe/
+            // NVLink number.
+            return {15.8e12, 68.0, 0.05, 200.0, 200.0};
     }
     return {};
 }

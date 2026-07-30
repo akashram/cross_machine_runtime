@@ -27,13 +27,18 @@ peaks (A100 FP32/HBM2e, VU9P DSP-slice estimate, TPU v4 bf16/HBM, a generic
 AVX-512 server), not measurements:
 
 ```
-workload                                 CPU (us)         GPU (us)        FPGA (us)         TPU (us)
-matmul 4096x4096x4096                   68720.48         7053.15        33571.70          509.78
-matmul 128x4096x4096 (batch)            68720.48         7053.15        33571.70         1911.42
-elementwise relu 1M elems                 168.77            9.11          158.94           16.99
-reduce sum 4096x4096->4096               1343.18           37.91          921.54           65.92
-transfer 64MB                            1343.18         2689.35         5642.41          681.09
+workload                                 CPU (us)         GPU (us)        FPGA (us)         TPU (us)         NPU (us)
+matmul 4096x4096x4096                   68720.48         7053.15        33571.70          509.78         8698.72
+matmul 128x4096x4096 (batch)            68720.48         7053.15        33571.70         1911.42        33554.48
+elementwise relu 1M elems                 168.77            9.11          158.94           16.99          123.41
+reduce sum 4096x4096->4096               1343.18           37.91          921.54           65.92          986.95
+transfer 64MB                            1343.18         2689.35         5642.41          681.09          335.59
 ```
+
+NPU column added 2026-07-30 (Phase 15 step 6) — same roofline arithmetic,
+new `DeviceType::NPU` case in `get_device_cost()` (see below), verified by
+re-running the exact command above and confirming zero regressions in the
+other four columns.
 
 Sanity checks that passed: GPU beats CPU/FPGA on every compute-bound
 workload (expected — FLOPS/sec ordering); the FPGA's placeholder DSP
@@ -49,6 +54,7 @@ matches `bytesMoved / transfer_gbs`, not the compute formula).
 | GPU (A100) | 19.5 (spec sheet) | 2039 (spec sheet) | 5.0 (placeholder) | TODO: measure (Phase 3 roofline) |
 | FPGA (VU9P) | 4.1 (spec estimate) | 77 (spec sheet) | 50 (placeholder) | TODO: measure (Phase 7) |
 | TPU v4 | 275 (spec sheet, bf16) | 1200 (spec sheet) | 10 (placeholder) | TODO: measure (Phase 8) |
+| NPU (Apple ANE-class) | 15.8 (spec estimate, INT8 as FP32-slot) | 68 (spec estimate) | 0.05 (placeholder) | TODO: measure (Phase 15 hardware validation) |
 
 ## Hardware notes
 - Builds and runs anywhere (validated on Mac). Calibration requires: Linux

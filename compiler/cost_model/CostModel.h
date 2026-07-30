@@ -7,7 +7,14 @@
 // rest of compiler/. Consumed by the placement pass (step 9) and the
 // auto-sharding pass (step 10, for transfer cost of inserted collectives).
 
-enum class DeviceType { CPU, GPU, FPGA, TPU };
+// NPU added 2026-07-30 (Phase 15 step 6): unlike CPU/GPU/FPGA/TPU, NPU's
+// DeviceCost below is INT8-only in practice (see npu_engine/cost_model's
+// own INT8 TOPS-based model) — get_device_cost(NPU) reuses this FP32-
+// shaped struct with a still-meaningful flops_per_sec approximation (see
+// CostModel.cpp's comment at that case) since Shape/estimate_us have no
+// dtype axis yet (same header TODO below applies to NPU too, not a new
+// gap this addition introduces).
+enum class DeviceType { CPU, GPU, FPGA, TPU, NPU };
 enum class OpType     { Matmul, Conv, Elementwise, Reduce, Transfer };
 
 // Generic op-size descriptor. Field meaning is op-dependent (documented in

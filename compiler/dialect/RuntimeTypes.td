@@ -25,7 +25,13 @@ def Runtime_DeviceKind : I32EnumAttr<"DeviceKind",
       I32EnumAttrCase<"GPU",  1, "gpu">,
       I32EnumAttrCase<"FPGA", 2, "fpga">,
       I32EnumAttrCase<"TPU",  3, "tpu">,
-      I32EnumAttrCase<"Unassigned", 4, "unassigned">,
+      // NPU added 2026-07-30 (Phase 15 step 6). Placed before Unassigned,
+      // which is bumped 4 -> 5 -- safe to renumber since this dialect has
+      // never been built (no MLIR/LLVM toolchain locally, see
+      // compiler/README.md), so no serialized IR exists anywhere that
+      // could depend on Unassigned's old numeric value.
+      I32EnumAttrCase<"NPU",  4, "npu">,
+      I32EnumAttrCase<"Unassigned", 5, "unassigned">,
     ]> {
   let cppNamespace = "::runtime";
   let genSpecializedAttr = 0;

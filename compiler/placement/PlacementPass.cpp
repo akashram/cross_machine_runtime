@@ -13,8 +13,15 @@ using namespace mlir;
 namespace runtime {
 namespace {
 
-constexpr std::array<DeviceType, 4> kCandidates = {
-    DeviceType::CPU, DeviceType::GPU, DeviceType::FPGA, DeviceType::TPU};
+// NPU added 2026-07-30 (Phase 15 step 6). Unlike CPU/GPU/FPGA/TPU, NPU is
+// NOT uniformly eligible for every op the loop below considers -- see
+// npuEligibleOp() and npu_engine/op_coverage/op_coverage.cpp (the
+// standalone, locally-run classification this filter mirrors; kept in
+// sync by comment cross-reference rather than a shared header, since
+// compiler/placement is MLIR-gated and npu_engine/ is deliberately
+// portable/dependency-free).
+constexpr std::array<DeviceType, 5> kCandidates = {
+    DeviceType::CPU, DeviceType::GPU, DeviceType::FPGA, DeviceType::TPU, DeviceType::NPU};
 
 DeviceKind toDeviceKind(DeviceType d) {
   switch (d) {
@@ -22,8 +29,31 @@ DeviceKind toDeviceKind(DeviceType d) {
     case DeviceType::GPU: return DeviceKind::GPU;
     case DeviceType::FPGA: return DeviceKind::FPGA;
     case DeviceType::TPU: return DeviceKind::TPU;
+    case DeviceType::NPU: return DeviceKind::NPU;
   }
   return DeviceKind::Unassigned;
+}
+
+// Real NPU op-eligibility filter, mirroring
+// npu_engine/op_coverage/op_coverage.cpp's ELIGIBLE/EligibleWithCaveat set
+// for the ops costKeyFor() below actually dispatches on (Matmul, Conv,
+// the elementwise group, Reduce, FusionGroup). Gather/Scatter -- the two
+// ops that table marks INELIGIBLE -- are deliberately NOT listed here:
+// costKeyFor() already returns std::nullopt for them (they aren't
+// dyn_cast/isa-matched anywhere in that function), so they never reach
+// this filter or the device-candidate loop at all today, for any device.
+// That means this filter is real, correct code with presently no live op
+// to exclude -- documented honestly (see op_coverage_main.cpp's own
+// printed finding) rather than overclaimed as "actively filtering NPU
+// out of ops the other four devices place." It becomes load-bearing the
+// moment gather/scatter placement support is ever added.
+bool npuEligibleOp(Operation *op) {
+  // FusionGroupOp: eligibility is inherited from its constituent ops
+  // (op_coverage.cpp's Inherited category). The fusion pass (step 5)
+  // only ever groups ops this same function would call eligible on its
+  // own, so treating a fusion_group as NPU-eligible by default is
+  // consistent with that invariant, not an unchecked assumption.
+  return !isa<GatherOp, ScatterOp>(op);
 }
 
 // Best-effort Shape extraction: rank-2 tensors map cleanly; anything else
@@ -122,6 +152,7 @@ struct PlacementPass : public PassWrapper<PlacementPass, OperationPass<func::Fun
       DeviceType best = DeviceType::CPU;
       double bestCost = std::numeric_limits<double>::infinity();
       for (DeviceType candidate : kCandidates) {
+        if (candidate == DeviceType::NPU && !npuEligibleOp(op)) continue;
         DeviceCost dc = get_device_cost(candidate);
         double cost = estimate_us(candidate, opType, shape, dc);
         for (Value operand : op->getOperands()) {
@@ -129,6 +160,7 @@ struct PlacementPass : public PassWrapper<PlacementPass, OperationPass<func::Fun
           DeviceType src = (srcKind == DeviceKind::GPU) ? DeviceType::GPU
                           : (srcKind == DeviceKind::FPGA) ? DeviceType::FPGA
                           : (srcKind == DeviceKind::TPU) ? DeviceType::TPU
+                          : (srcKind == DeviceKind::NPU) ? DeviceType::NPU
                           : DeviceType::CPU;
           if (src == candidate) continue;
           auto operandTy = dyn_cast<RankedTensorType>(operand.getType());
