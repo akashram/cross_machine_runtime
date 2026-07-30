@@ -594,6 +594,92 @@ throughout; the Wald-vs-Clopper-Pearson approximation in step 8).
 Phase 14 is now fully code-complete (8/8); no hardware validation is
 needed for this phase (fully CPU-portable).
 
+**Phase 15: NPU Backend — steps 2-7 CODE COMPLETE (6/7 steps not counting
+step 1, 2026-07-30)**
+Lives in `npu_engine/`. Same hardware-gated-but-locally-codeable pattern
+as Phase 3/7/8: no AWS/GCP rental story for NPUs (edge/mobile hardware —
+Apple ANE, Qualcomm Hexagon, Google Coral), so step 1 (CoreML/ONNX
+Runtime NPU toolchain validation, a trivial op on real hardware) is
+deferred to hardware validation — no ANE/Coral hardware and no
+`coremltools`/`onnx`/`onnxruntime` installed locally (confirmed via
+`ModuleNotFoundError` on both). Everything else is real, non-stub code,
+actually built and run today: `quant_export` reuses
+`inference_serving::GptqQuantizer` completely unchanged (at `bits=8`
+instead of GPTQ's usual `bits=4`, since NPU toolchains default to INT8)
+applied to `transformer/`'s real trained `w_out` weight, serializing to a
+custom `.npuw` binary format — actually run locally, with the real
+ONNX/CoreML writer (`npu_onnx_export.py`) left honestly unrun (same
+Python packages missing); `cost_model` (`npu_cost_model.cpp`) is a
+portable INT8 latency/efficiency model finding the NPU wins on power
+efficiency (7.9 TOPS/W vs. GPU's 0.78 TOPS/W) and tiny-workload dispatch
+overhead but loses to GPU on large-workload absolute latency — both
+real, measured outcomes from the same model, not a one-sided "NPU wins"
+narrative; `op_coverage` walks all 18 ops actually defined in
+`compiler/dialect/RuntimeOps.td` and finds gather/scatter are the only
+two architecturally excluded (dynamic indexing) — plus a separate real
+finding that `PlacementPass.cpp` doesn't currently place gather/scatter
+for ANY device, not just NPU, so the new NPU eligibility filter is
+correct code that only becomes load-bearing once gather/scatter
+placement exists at all; `thermal` mirrors `fpga_engine/thermal_router`'s
+exact decision-logic/hardware-read split, disclosing a real platform gap
+(no stable public per-ANE-block thermal sensor on Apple Silicon, unlike
+FPGA's XADC); step 6 adds NPU as a device to `compiler/cost_model/
+CostModel.cpp` (real edit, still builds+runs — the one Phase 4 file that
+does) and extends `compiler/placement/PlacementPass.cpp`'s per-op device
+eligibility (real edit, joins the existing MLIR-toolchain-gated unrun
+bucket — unchanged status, not a new gap); step 7 registers NPU as a
+fifth `ServingRouter` backend, `available=false`, placed last in the
+fallback priority order (after FPGA, before CPU) since an
+inference-only, edge/mobile-first, restricted-operator-model backend
+isn't a peer to the three general datacenter accelerators already
+registered. See `npu_engine/DESIGN.md` for the full rationale.
+
+**Phase 16: Containerized & Orchestrated Deployment — 6/7 steps
+code-complete (steps 1, 3-7; step 2 deferred, 2026-07-30)**
+Cross-cutting, no single `*_engine/` directory — artifacts live at their
+conventional real-world locations (`Dockerfile` at repo root, `k8s/` for
+manifests), with `containers/README.md` and `containers/DESIGN.md`
+holding the phase-level write-up. Every artifact is real and correct but
+UNRUN: no Docker, kubectl, GPU, or Kubernetes cluster exist on this Mac.
+Tracing the actual CMake dependency graph (not guessed) found the whole
+tree only requires a C++23 compiler + CMake >=3.25 + Ninja — every
+optional dependency (gRPC/FlatBuffers/libfabric/libbpf) is already
+gracefully gated — and surfaced a plausible (unconfirmed) root cause for
+`ci.yml`'s long-standing failures: it never pins `cmake`, and Ubuntu
+22.04's apt version (3.22.x) predates this project's 3.25 requirement.
+Step 1 (`Dockerfile`, multi-stage, portable subset) and step 3 (GPU
+passthrough — `docker/gpu/daemon.json`, `Dockerfile.cuda`, compose file)
+are real and unrun. Steps 4-5 (`k8s/serving/`, `k8s/training/`) are real
+K8s manifests — a latency-driven HPA (not raw CPU%, per PLAN.md's
+explicit ask) for serving, a `StatefulSet` with `podManagementPolicy:
+Parallel` for gang-scheduled training — unrun (no kubectl/cluster).
+Writing these manifests surfaced two real gaps, both now closed
+(2026-07-30): no long-running `serving_daemon` process existed
+(`inference_serving/serving_backend/` had only a unit test), and no
+rank-per-process training driver existed (every multi-rank step in this
+repo simulates ranks as threads in one process). `serving_daemon.cpp` is
+a real long-running process wrapping `ServingRouter`, tested end-to-end
+over real TCP (`nc`, real generated tokens back, clean SIGTERM shutdown)
+— building it caught and fixed a real bug, an oversized prompt tripping
+an `assert()` abort in `model_forward`'s positional-embedding indexing,
+now clamped per-request instead of crashing the daemon.
+`distributed_training/training_worker/` is a real process-per-rank
+driver (`RANK`/`WORLD_SIZE`/`PEER_HOSTS` env vars, real inter-process
+TCP via a new additive `TcpChannel` constructor overload in
+`networking/common/channel.{h,cpp}` — the existing single-host
+constructor and its test are untouched), validated as 4 actual separate
+OS processes on this Mac: loss trajectory matches
+`full_training_loop`'s thread-simulated baseline exactly (2.6317 ->
+0.0008), real per-rank checkpoint shards written to disk. Both K8s
+manifests now target these real binaries. Steps 6-7 (device-plugin gap
+analysis: NVIDIA vs. Xilinx FPGA vs. TPU's node-pool model; custom
+schedulers vs. Kubernetes, grounded in `topo_scheduler`/`multitenancy`'s
+real measured behavior) are pure written analysis, no gate, done. Step 2
+(cgroup interaction measured) is a bare one-line deferral rather than a
+fake test plan — its entire deliverable is a real measurement that
+needs Docker to produce honestly. Full `ctest`: 106/106 passing, zero
+regressions from any of the above.
+
 ---
 
 ## Execution strategy (updated 2026-07-19)
@@ -622,20 +708,23 @@ numbers stay TODO until the hardware validation pass.
 before hardware" philosophy applies to them: Phase 13 (RAG) and Phase 14
 (Adversarial Robustness) are now BOTH code-complete and fully locally run
 (2026-07-29, see above) — no hardware gate at all for either phase.
-Phase 15 (NPU Backend) mirrors Phase 3/7/8's hardware-gated-but-
-locally-codeable pattern. Phase 16 (Containerized & Orchestrated
-Deployment) is mixed — its Docker/cgroup steps are local, its GPU
-passthrough/Kubernetes-cluster steps are hardware/cluster-gated.
+Phase 15 (NPU Backend) and Phase 16 (Containerized & Orchestrated
+Deployment) are now BOTH code-complete for every locally-codeable piece
+(2026-07-30, see above) — Phase 15 has only step 1 (real ANE/Coral
+hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
+measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
+and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: Phase 15/16's local-only pieces, or the hardware validation
-pass below.** Phases 13 and 14 — every fully-local newly-scoped phase —
-are done. What's left in the local-implementation order is only the
-locally-codeable SUBSET of Phase 15 (NPU cost model, op-eligibility
-analysis, placement/serving-router integration — all portable per its own
-PLAN.md section) and Phase 16 (Docker image + cgroup interaction
-findings). The hardware validation pass itself (GPU/FPGA/TPU/multi-node/
-eBPF, phases 3-9 in original order) remains blocked on provisioning cloud
-hardware, not on any further local coding.
+**Next up: the hardware validation pass below.** Every phase in the
+local-implementation order (1-10, 12-16) is now code-complete — nothing
+locally-codeable remains unwritten. What's left across the entire project
+is: (a) the hardware validation pass itself (GPU/FPGA/TPU/multi-node/
+eBPF, phases 3-9 in original order), blocked on provisioning cloud
+hardware; (b) Phase 15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5
+(Docker/kubectl/cluster, none installed locally — see the pre-hardware
+TODO in project memory on the standing "no new local installs without
+asking" decision, which now also covers Docker/kubectl alongside the
+existing JAX/Java-TLC entries).
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
