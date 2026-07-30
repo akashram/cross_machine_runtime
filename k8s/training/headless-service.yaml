@@ -1,0 +1,21 @@
+# Phase 16 step 5 — headless Service giving each training pod a stable,
+# individually-addressable DNS name (training-worker-0.training-worker,
+# training-worker-1.training-worker, ...) via the StatefulSet's ordinal.
+# Required for rank rendezvous: `clusterIP: None` means no load-balancing
+# VIP, so a client resolving training-worker-0.training-worker.<ns>.svc
+# reaches pod ordinal 0 specifically, not an arbitrary replica — exactly
+# what a rank needs to find "the rank-0 / master" node deterministically.
+# Real, complete, UNRUN (no cluster locally — see containers/README.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: training-worker
+  labels:
+    app: training-worker
+spec:
+  clusterIP: None
+  selector:
+    app: training-worker
+  ports:
+    - name: rendezvous
+      port: 29500

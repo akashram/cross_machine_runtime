@@ -1,0 +1,104 @@
+# Phase 16 step 5 — gang-scheduled manifest for distributed training.
+# Status: real, complete, UNRUN (no cluster locally — see
+# containers/README.md).
+#
+# Judgment call, stated explicitly per this step's own instructions: a
+# plain `StatefulSet` with `podManagementPolicy: Parallel` was chosen over
+# a Kubeflow `PyTorchJob`. Reasoning: `PyTorchJob` is a CRD installed by
+# the Kubeflow training-operator, which is a real, separate cluster
+# dependency this repo cannot assume exists (unlike `Deployment`/
+# `StatefulSet`, built into every Kubernetes distribution) — and this
+# repo's training loop is NOT a PyTorch program (`distributed_training/`
+# is a from-scratch autograd + collectives stack, see
+# `distributed_training/autograd/`), so `PyTorchJob`'s specific value-add
+# (torch.distributed environment-variable injection, torchrun-aware
+# restart semantics) doesn't actually apply here. A generic multi-pod
+# gang-start primitive is the honest fit; if a training-operator-style CRD
+# is ever installed for other reasons, this StatefulSet's shape ports
+# directly (same replica/env-var/DNS pattern most training operators use
+# under the hood).
+#
+# Why synchronized start matters, concretely, for THIS workload:
+# `podManagementPolicy` defaults to `OrderedReady`, which starts pod N+1
+# only once pod N reports Ready — fine for a stateful app like a
+# database replica set, but wrong for a rank-based collective: every
+# rank in a ring all-reduce (`networking/ring_allreduce`,
+# `distributed_training/full_training_loop` step 20) needs to open a
+# connection to its ring neighbor(s) during its OWN startup rendezvous;
+# if rank 3 comes up while rank 0 is still `OrderedReady`-pending behind
+# ranks 1-2, rank 3's very first connect-to-neighbor attempt targets a
+# pod that doesn't exist yet. `Parallel` schedules all N pods
+# simultaneously so every rank's rendezvous retry loop (see the worker
+# entrypoint's env vars below) has real peers to eventually connect to,
+# instead of racing the default one-at-a-time rollout.
+#
+# Deeper, disclosed gap this manifest does NOT paper over: every
+# multi-rank step actually built in this repo so far (ring_allreduce,
+# collectives, full_training_loop) simulates all N ranks as THREADS
+# inside a single OS process talking over loopback TCP — grepping
+# ring_allreduce.{h,cpp}/collectives.{h,cpp} for RANK/WORLD_SIZE/getenv
+# turns up nothing, confirming there is no existing binary in this repo
+# that takes a rank ID and a peer address from the environment and
+# behaves as ONE rank in a real multi-process/multi-pod topology. The
+# `env` block below (RANK/WORLD_SIZE/MASTER_ADDR) and `command` targeting
+# a `training_worker` binary describe the real shape such a binary would
+# need — not something `training_loop_test` (the actual, existing,
+# locally-run binary) accepts today. Writing a real `training_worker`
+# entrypoint that reads these and drives `Autograd`/`RingAllreduce`
+# per-process instead of per-thread is real, scoped follow-on work, not
+# done as part of this Phase 16 pass.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: training-worker
+spec:
+  serviceName: training-worker
+  replicas: 4
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: training-worker
+  template:
+    metadata:
+      labels:
+        app: training-worker
+    spec:
+      subdomain: training-worker
+      containers:
+        - name: training-worker
+          image: cross_machine_runtime:latest
+          # TODO: training_worker doesn't exist yet — see gap note above.
+          # training_loop_test (the real, existing, tested binary) runs
+          # all 4 ranks in-process and takes no arguments, so it cannot
+          # be substituted here without changing what this manifest
+          # demonstrates (4 pods each redundantly simulating all 4 ranks
+          # is not gang-scheduled distributed training).
+          command: ["/src/build/debug/distributed_training/full_training_loop/training_worker"]
+          env:
+            # Kubernetes' downward API has no direct "pod ordinal" field,
+            # only the full pod name (training-worker-0, -1, ...); a real
+            # training_worker entrypoint would need to parse the integer
+            # suffix after the last '-' itself to get a numeric rank, not
+            # treat POD_NAME as RANK directly. Named POD_NAME rather than
+            # RANK here for that reason — RANK is derived at process
+            # startup, not injected as a ready-to-use integer.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WORLD_SIZE
+              value: "4"
+            - name: MASTER_ADDR
+              value: "training-worker-0.training-worker"
+            - name: MASTER_PORT
+              value: "29500"
+          ports:
+            - containerPort: 29500
+              name: rendezvous
+          resources:
+            requests:
+              cpu: "1"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
