@@ -55,3 +55,7 @@ add_subdirectory(ml)
 # Phase 13: Retrieval-Augmented Generation — depends on transformer, ml/knn,
 # inference_serving; all portable, no gate needed.
 add_subdirectory(rag)
+
+# Phase 14: Adversarial Robustness — depends on distributed_training/autograd;
+# portable, no gate needed.
+add_subdirectory(adversarial)
