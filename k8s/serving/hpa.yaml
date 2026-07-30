@@ -1,0 +1,55 @@
+# Phase 16 step 4 — HorizontalPodAutoscaler tied to the SLA scheduler's
+# latency target, NOT raw CPU% (PLAN.md's explicit ask for this step).
+# Status: real, complete, UNRUN. Targets autoscaling/v2 (stable since
+# Kubernetes 1.23; the version needed for the `Pods`/`External` metric
+# types below — v1 only supports plain CPU/memory).
+#
+# The honest gap: `Pods` metric type here reads a custom metric named
+# `serving_p99_latency_ms` from whatever the cluster's metrics pipeline
+# exposes to the Kubernetes custom-metrics API — normally a Prometheus
+# Adapter (https://github.com/kubernetes-sigs/prometheus-adapter)
+# configured with a rule that maps a real Prometheus query (e.g.
+# `histogram_quantile(0.99, rate(serving_request_duration_seconds_bucket[1m]))`)
+# onto that metric name. NEITHER the Prometheus Adapter NOR a
+# `/metrics` endpoint exporting that histogram exist yet in this repo —
+# this HPA is written for the metric name a real serving_daemon (see
+# deployment.yaml's own gap note) would need to export, not a metric
+# that already works today. `targetValue: "200"` (200ms) is an
+# illustrative SLA target for this manifest, not a number measured from
+# real traffic — inference_serving/sla_scheduler/README.md's own
+# 200-request benchmark trace uses PER-REQUEST latency budgets (1.5x/8x
+# service time by urgency class) rather than one fleet-wide p99 target,
+# so this single number is a deliberately simplified proxy for "scale out
+# when the fleet is missing its latency budget," not a claim that a
+# single global p99 threshold is how sla_scheduler itself reasons about
+# urgency.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: serving-router
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: serving-router
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Pods
+      pods:
+        metric:
+          name: serving_p99_latency_ms
+        target:
+          type: AverageValue
+          averageValue: "200"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+    scaleDown:
+      # Slower scale-down than scale-up: an inference fleet oscillating
+      # in and out under bursty traffic re-triggers cold-start latency
+      # (model/weights load) on every scale-up, which is exactly the
+      # kind of tail-latency cost sla_scheduler's EDF admission and
+      # continuous_batching's throughput work are trying to avoid
+      # causing in the first place.
+      stabilizationWindowSeconds: 300

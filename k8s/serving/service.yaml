@@ -1,0 +1,17 @@
+# Phase 16 step 4 — ClusterIP Service fronting the serving-router
+# Deployment. Real, complete, UNRUN — same gap noted in deployment.yaml
+# (no serving_daemon binary yet to actually listen on :8080).
+apiVersion: v1
+kind: Service
+metadata:
+  name: serving-router
+  labels:
+    app: serving-router
+spec:
+  selector:
+    app: serving-router
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

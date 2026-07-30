@@ -1,0 +1,76 @@
+# Phase 16 step 4 — inference serving Deployment.
+# Status: real, complete, UNRUN (no kubectl/cluster locally — see
+# containers/README.md). Targets Kubernetes 1.30 API conventions
+# (apps/v1 Deployment, stable since 1.9).
+#
+# Honest gap this manifest deliberately does NOT paper over:
+# inference_serving/serving_backend/ has a real ServingRouter (routing +
+# CPU-backend dispatch logic, see its README) but NO long-running
+# HTTP/gRPC server binary yet — only `serving_router_test`, a unit test
+# that asserts and exits. A Deployment's whole model (readiness/liveness
+# probes, restart-on-crash, steady request traffic) assumes a
+# long-running process, which this repo does not have yet for serving.
+# `command`/`args` below target a not-yet-written `serving_daemon` binary
+# (ServingRouter wrapped in an HTTP/gRPC listen loop — a real, scoped,
+# small addition, not built as part of this Phase 16 pass) so this
+# manifest's SHAPE is correct for what a real deployment needs; the image
+# actually buildable today (root Dockerfile) has no such binary to run.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serving-router
+  labels:
+    app: serving-router
+    component: inference-serving
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: serving-router
+  template:
+    metadata:
+      labels:
+        app: serving-router
+    spec:
+      containers:
+        - name: serving-router
+          image: cross_machine_runtime:latest
+          # TODO: real entrypoint once serving_daemon exists. Documented
+          # stand-in today would be `ctest -R serving_router_test` (exits
+          # immediately, PASS/FAIL — NOT suitable as a Deployment
+          # container command, shown here only for what it would look
+          # like structurally):
+          command: ["/src/build/debug/inference_serving/serving_backend/serving_daemon"]
+          args:
+            - "--listen=0.0.0.0:8080"
+            - "--preferred-backend=cpu"
+          ports:
+            - containerPort: 8080
+              name: http
+          # Latency-budget-aware readiness, not a bare TCP/HTTP 200 check:
+          # inference_serving/sla_scheduler (Phase 9 step 3) already
+          # tracks per-request deadlines internally; a real
+          # serving_daemon would expose its own current SLA-violation
+          # rate here so a pod that's technically up but badly missing
+          # its latency budget stops receiving new traffic, matching how
+          # sla_scheduler's EDF admission already treats an overloaded
+          # server internally.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "1"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
