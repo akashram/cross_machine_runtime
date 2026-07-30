@@ -59,3 +59,9 @@ add_subdirectory(rag)
 # Phase 14: Adversarial Robustness — depends on distributed_training/autograd;
 # portable, no gate needed.
 add_subdirectory(adversarial)
+
+# Phase 15: NPU Backend — quant_export (step 2) reuses inference_serving/gptq,
+# portable, no gate needed. cost_model/op_coverage/thermal are manually-built
+# (clang++, no CMake), same convention as fpga_engine/tpu_engine's *_model.cpp
+# files — see npu_engine/README.md.
+add_subdirectory(npu_engine)
