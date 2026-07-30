@@ -66,6 +66,23 @@ class TcpChannel : public Channel {
 public:
   TcpChannel(int rank, int world_size, uint16_t base_port,
              const std::string &host = "127.0.0.1");
+
+  // Same accept-then-connect handshake as above, but each lower rank j is
+  // dialed at its own hostname `peer_hosts[j]` instead of one shared
+  // `host` string -- added for `distributed_training/training_worker`
+  // (Phase 16 gap fix), where each rank is a separate OS process/pod with
+  // its own DNS name (e.g. a Kubernetes StatefulSet's
+  // `<name>-<ordinal>.<headless-svc>` pattern), not reachable via a
+  // single shared address the way `make_tcp_loopback_mesh`'s ranks-as-
+  // threads-in-one-process setup is. `peer_hosts` must have exactly
+  // `world_size` entries, one per rank; `peer_hosts[rank]` (this rank's
+  // own entry) is present for a uniform index-by-rank list but unused
+  // for connecting (this rank only dials LOWER ranks; higher ranks dial
+  // in). The listen side always binds "0.0.0.0" (any interface) — a real
+  // multi-host deployment can't bind to a specific peer's address the
+  // way loopback testing binds to "127.0.0.1".
+  TcpChannel(int rank, int world_size, uint16_t base_port,
+             const std::vector<std::string> &peer_hosts);
   ~TcpChannel() override;
 
   TcpChannel(const TcpChannel &) = delete;
@@ -78,6 +95,11 @@ public:
   void shutdownPeer(int peer) override;
 
 private:
+  // Accepts from every higher rank on `listenFd` and closes it -- the
+  // half of the handshake shared verbatim by both constructors above
+  // (only the connect-to-lower-ranks half differs by address scheme).
+  void acceptFromHigherRanks(int listenFd);
+
   int rank_;
   int world_size_;
   std::vector<int> fds_; // fds_[peer] == shared bidirectional socket to `peer`

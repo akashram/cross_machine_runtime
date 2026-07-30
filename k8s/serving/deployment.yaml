@@ -3,18 +3,23 @@
 # containers/README.md). Targets Kubernetes 1.30 API conventions
 # (apps/v1 Deployment, stable since 1.9).
 #
-# Honest gap this manifest deliberately does NOT paper over:
-# inference_serving/serving_backend/ has a real ServingRouter (routing +
-# CPU-backend dispatch logic, see its README) but NO long-running
-# HTTP/gRPC server binary yet — only `serving_router_test`, a unit test
-# that asserts and exits. A Deployment's whole model (readiness/liveness
-# probes, restart-on-crash, steady request traffic) assumes a
-# long-running process, which this repo does not have yet for serving.
-# `command`/`args` below target a not-yet-written `serving_daemon` binary
-# (ServingRouter wrapped in an HTTP/gRPC listen loop — a real, scoped,
-# small addition, not built as part of this Phase 16 pass) so this
-# manifest's SHAPE is correct for what a real deployment needs; the image
-# actually buildable today (root Dockerfile) has no such binary to run.
+# UPDATE (2026-07-30): the gap this manifest previously disclosed — no
+# long-running serving process, only `serving_router_test` (a unit test
+# that asserts and exits) — is now closed. See
+# `inference_serving/serving_backend/README.md`'s "serving_daemon" section
+# for the real binary, its real local run (client round-trip over a real
+# TCP socket, clean SIGTERM shutdown, a real crash bug found and fixed
+# during testing). This manifest is still cluster-unrun (no real
+# Kubernetes cluster on this Mac), but now targets a real, tested
+# entrypoint instead of an aspirational one.
+#
+# `serving_daemon`'s actual wire protocol is a deliberately minimal raw
+# TCP line protocol (one line of text in, one line of generated text
+# back) — NOT HTTP, so this manifest uses `tcpSocket` probes rather than
+# `httpGet` ones (there is no `/healthz` HTTP endpoint to poll). Port and
+# generation length are configured via the env vars `serving_daemon.cpp`
+# actually reads (`SERVING_PORT`, `SERVING_MAX_NEW_TOKENS`), not CLI
+# flags — the real binary takes no arguments.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,35 +40,30 @@ spec:
       containers:
         - name: serving-router
           image: cross_machine_runtime:latest
-          # TODO: real entrypoint once serving_daemon exists. Documented
-          # stand-in today would be `ctest -R serving_router_test` (exits
-          # immediately, PASS/FAIL — NOT suitable as a Deployment
-          # container command, shown here only for what it would look
-          # like structurally):
           command: ["/src/build/debug/inference_serving/serving_backend/serving_daemon"]
-          args:
-            - "--listen=0.0.0.0:8080"
-            - "--preferred-backend=cpu"
+          env:
+            - name: SERVING_PORT
+              value: "8080"
+            - name: SERVING_MAX_NEW_TOKENS
+              value: "20"
           ports:
             - containerPort: 8080
-              name: http
-          # Latency-budget-aware readiness, not a bare TCP/HTTP 200 check:
-          # inference_serving/sla_scheduler (Phase 9 step 3) already
-          # tracks per-request deadlines internally; a real
-          # serving_daemon would expose its own current SLA-violation
-          # rate here so a pod that's technically up but badly missing
-          # its latency budget stops receiving new traffic, matching how
-          # sla_scheduler's EDF admission already treats an overloaded
-          # server internally.
+              name: serving-tcp
+          # TCP-connect probes, not HTTP: serving_daemon's real protocol
+          # has no HTTP layer. A future SLA-aware readiness signal (per
+          # inference_serving/sla_scheduler's EDF admission, Phase 9 step
+          # 3 — a pod that's technically up but badly missing its
+          # latency budget should stop receiving new traffic) would need
+          # serving_daemon to expose that itself; not built as part of
+          # this pass, kept as a real, disclosed gap rather than a fake
+          # httpGet probe against an endpoint that doesn't exist.
           readinessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 20

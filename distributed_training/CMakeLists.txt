@@ -44,6 +44,7 @@ add_subdirectory(sft)                  # Step 22 — portable (toy model)
 add_subdirectory(reward_model)         # Step 23 — portable (toy model)
 add_subdirectory(ppo_rlhf)             # Step 24 — portable (toy model)
 add_subdirectory(dpo)                  # Step 25 — portable (toy model)
+add_subdirectory(training_worker)      # Phase 16 gap fix — portable, real process-per-rank driver
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(STATUS "distributed_training/: gpudirect_storage requires Linux+GPU — skipping on ${CMAKE_SYSTEM_NAME}")

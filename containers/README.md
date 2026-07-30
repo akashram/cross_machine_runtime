@@ -4,10 +4,18 @@
 step 2 explicitly deferred (needs Docker, not installed locally — see
 below). Every artifact is real and correct but UNRUN: no Docker, no
 kubectl, no GPU, and no Kubernetes cluster exist on the dev Mac this was
-written on.** See `DESIGN.md` for the full rationale, the two genuine
-gaps this pass found and disclosed (no per-process rank-launching
-training entrypoint; no long-running serving daemon binary), and the
+written on.** See `DESIGN.md` for the full rationale and the
 device-plugin / custom-scheduler comparisons in full.
+
+**Both gaps this pass originally disclosed are now closed (2026-07-30):**
+`inference_serving/serving_backend/serving_daemon.cpp` (a real long-
+running process wrapping `ServingRouter`) and
+`distributed_training/training_worker/` (a real process-per-rank driver,
+locally validated as 4 separate OS processes over real inter-process
+TCP — see that directory's README for the run, including a loss-
+trajectory match against the thread-simulated baseline). `k8s/serving/
+deployment.yaml` and `k8s/training/statefulset.yaml` now target these
+real binaries instead of aspirational ones.
 
 Artifacts live at their conventional real-world locations rather than
 nested under this directory, since Docker/Kubernetes tooling expects
@@ -24,8 +32,8 @@ the role individual per-step `README.md` files play in every other phase
 | 1. Dockerfile for the portable build | Multi-stage image (builder + runtime) for the CPU-portable tree subset | `Dockerfile` (repo root) | Real, complete, **unrun** — no Docker locally |
 | 2. cgroup interaction measured | Run `cpu_engine`'s affinity/hugepage/NUMA code inside vs. outside a container, measure what breaks | — | **Deferred entirely** — this step's whole point is a *measured* finding from actually running containers; without Docker there is nothing honest to write beyond this line. Not attempted as a fake "test plan." |
 | 3. GPU passthrough config | `nvidia-container-toolkit` daemon config + CUDA-base Dockerfile variant | `docker/gpu/` | Real, complete, **unrun** — hardware- AND tool-gated (no GPU, no Docker) |
-| 4. K8s manifests: inference serving | Deployment + Service + latency-driven HPA for `ServingRouter` | `k8s/serving/` | Real, complete, **unrun** — no kubectl/cluster; also surfaces a real gap (no serving daemon binary exists yet, only a unit test) |
-| 5. K8s manifests: gang-scheduled training | StatefulSet (`podManagementPolicy: Parallel`) + headless Service for `distributed_training/` | `k8s/training/` | Real, complete, **unrun**; surfaces a deeper gap (no rank-per-process training entrypoint exists — every multi-rank step in this repo simulates ranks as threads in one process) |
+| 4. K8s manifests: inference serving | Deployment + Service + latency-driven HPA for `ServingRouter` | `k8s/serving/` | Real, complete, **unrun** (no kubectl/cluster) — now targets `serving_daemon`, a real, locally-tested long-running process (see `inference_serving/serving_backend/README.md`) |
+| 5. K8s manifests: gang-scheduled training | StatefulSet (`podManagementPolicy: Parallel`) + headless Service for `distributed_training/` | `k8s/training/` | Real, complete, **unrun** (no cluster) — now targets `training_worker`, a real process-per-rank driver validated locally as 4 separate OS processes (see `distributed_training/training_worker/README.md`) |
 | 6. Device plugin gap analysis | NVIDIA vs. Xilinx FPGA vs. TPU device exposure models, compared specifically | `k8s/device_plugin_gap_analysis.md` | Written analysis, no hardware/tooling needed — done |
 | 7. Custom schedulers vs. Kubernetes | `topo_scheduler`/`multitenancy` vs. Kubernetes-native + Kueue/Volcano, with a real, differentiated verdict per component | `k8s/scheduler_comparison.md` | Written analysis, no hardware/tooling needed — done |
 

@@ -14,5 +14,11 @@ target_link_libraries(NetCommon PUBLIC Threads::Threads)
 add_executable(channel_test channel_test.cpp)
 target_link_libraries(channel_test PRIVATE NetCommon)
 
+# Sanity check for the peer_hosts-vector TcpChannel constructor (added
+# for distributed_training/training_worker's real per-process ranks).
+add_executable(channel_peerhosts_test channel_peerhosts_test.cpp)
+target_link_libraries(channel_peerhosts_test PRIVATE NetCommon)
+
 enable_testing()
 add_test(NAME channel_test COMMAND channel_test)
+add_test(NAME channel_peerhosts_test COMMAND channel_peerhosts_test)

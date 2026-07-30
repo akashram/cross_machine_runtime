@@ -69,7 +69,15 @@ five additional targets for real
 out would silently under-sell what "the portable build, containerized"
 should mean.
 
-## 4. Two genuine gaps this pass found, disclosed rather than hidden
+## 4. Two genuine gaps this pass found — closed 2026-07-30
+
+Both are now closed; see `distributed_training/training_worker/README.md`
+and `inference_serving/serving_backend/README.md`'s "serving_daemon"
+section for the real binaries and their real local test runs (4 separate
+OS processes for `training_worker`, reproducing the thread-simulated
+baseline's exact loss trajectory; a real client round-trip over TCP for
+`serving_daemon`, plus a real crash bug found and fixed during testing).
+Original disclosure kept below for the record.
 
 Both surfaced while writing the Kubernetes manifests (steps 4/5), from
 actually reading the relevant source rather than assuming a server/worker
@@ -139,5 +147,4 @@ all).
   why this is a bare deferral rather than a written-but-unrun artifact.
 - Actually running any of steps 1/3/4/5 — no Docker, GPU, or Kubernetes
   cluster available locally.
-- The two entrypoint gaps in §4 — real follow-on work, not attempted
-  here.
+- The two entrypoint gaps in §4 — closed 2026-07-30, see that section.

@@ -98,15 +98,11 @@ int connectWithRetry(uint16_t port, const std::string &host) {
 
 } // namespace
 
-TcpChannel::TcpChannel(int rank, int world_size, uint16_t base_port, const std::string &host)
-    : rank_(rank), world_size_(world_size), fds_(world_size, -1) {
-  int listenFd = makeListenSocket(static_cast<uint16_t>(base_port + rank), host);
-
-  // Accept from every higher rank (they dial us); connect out to every
-  // lower rank (we dial them). This ordering — accept-then-connect, with
-  // higher ranks always initiating — is what avoids every pair racing to
-  // both `connect()` each other at once.
-  int numAccepts = world_size - 1 - rank;
+void TcpChannel::acceptFromHigherRanks(int listenFd) {
+  // Accept from every higher rank (they dial us). This ordering —
+  // accept-then-connect, with higher ranks always initiating — is what
+  // avoids every pair racing to both `connect()` each other at once.
+  int numAccepts = world_size_ - 1 - rank_;
   for (int i = 0; i < numAccepts; ++i) {
     sockaddr_in peerAddr{};
     socklen_t peerLen = sizeof(peerAddr);
@@ -120,9 +116,39 @@ TcpChannel::TcpChannel(int rank, int world_size, uint16_t base_port, const std::
     fds_[peerRank] = fd;
   }
   ::close(listenFd);
+}
 
+TcpChannel::TcpChannel(int rank, int world_size, uint16_t base_port, const std::string &host)
+    : rank_(rank), world_size_(world_size), fds_(world_size, -1) {
+  int listenFd = makeListenSocket(static_cast<uint16_t>(base_port + rank), host);
+  acceptFromHigherRanks(listenFd);
+
+  // Connect out to every lower rank (we dial them), all at the same
+  // shared `host` -- fine for loopback testing, where every rank is a
+  // thread in one process.
   for (int j = 0; j < rank; ++j) {
     int fd = connectWithRetry(static_cast<uint16_t>(base_port + j), host);
+    int32_t myRankNet = htonl(rank);
+    sendAll(fd, &myRankNet, sizeof(myRankNet));
+    fds_[j] = fd;
+  }
+}
+
+TcpChannel::TcpChannel(int rank, int world_size, uint16_t base_port,
+                        const std::vector<std::string> &peer_hosts)
+    : rank_(rank), world_size_(world_size), fds_(world_size, -1) {
+  if (static_cast<int>(peer_hosts.size()) != world_size)
+    throw std::runtime_error("Channel: peer_hosts must have exactly world_size entries");
+
+  // Bind "any interface" -- unlike loopback testing, this rank's own
+  // listen address isn't necessarily reachable at the same name its
+  // peers use to dial it (e.g. a pod binds 0.0.0.0 but is dialed via its
+  // StatefulSet DNS name).
+  int listenFd = makeListenSocket(static_cast<uint16_t>(base_port + rank), "0.0.0.0");
+  acceptFromHigherRanks(listenFd);
+
+  for (int j = 0; j < rank; ++j) {
+    int fd = connectWithRetry(static_cast<uint16_t>(base_port + j), peer_hosts[static_cast<size_t>(j)]);
     int32_t myRankNet = htonl(rank);
     sendAll(fd, &myRankNet, sizeof(myRankNet));
     fds_[j] = fd;
