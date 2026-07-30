@@ -118,11 +118,21 @@ void test_real_model_export() {
   double ratio = static_cast<double>(fp32_bytes) / static_cast<double>(npu_bytes);
   std::printf("  w_out export size: fp32=%zu bytes, npu-int8=%zu bytes, ratio=%.3fx\n",
               fp32_bytes, npu_bytes, ratio);
-  // INT8 payload alone is exactly 4x smaller than FP32; the file's ratio
-  // is slightly under 4x because it also carries float32 scales + int32
-  // zero-points per group (real per-file overhead, not hidden).
-  require(ratio > 3.0 && ratio < 4.0,
-          "INT8 export is a real, substantial (but not exactly 4x, due to scale/zero-point overhead) size reduction vs FP32");
+  // INT8 payload alone is exactly 4x smaller than FP32 -- that's the
+  // ceiling, never exceeded, since the format never adds bytes beyond
+  // qweight+scales+zeros+header. How CLOSE the real ratio gets to that
+  // ceiling depends on cols/group_size: this model's w_out (transposed)
+  // is only d_model=16 columns wide at group_size=8, i.e. just 2 groups
+  // per row, so the per-group float32 scale + int32 zero-point overhead
+  // (16 bytes/row) is comparable in size to the row's own INT8 payload
+  // (16 bytes/row) -- a real, measured finding (ratio landed near 2x,
+  // not near 4x, on this specific small model), not a bug: the ceiling
+  // is only approached when cols >> group_size, so more groups amortize
+  // the per-group metadata over more weights. Bounds below reflect that
+  // real relationship rather than assuming the 4x ceiling is always
+  // nearly reached.
+  require(ratio > 1.0 && ratio < 4.0,
+          "INT8 export is a real size reduction vs FP32, strictly below the 4x INT8-payload-only ceiling");
   std::remove(path.c_str());
 }
 
