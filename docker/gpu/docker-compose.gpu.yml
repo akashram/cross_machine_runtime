@@ -1,0 +1,27 @@
+# Phase 16 step 3 — real docker-compose GPU reservation stanza.
+# Status: real, complete, UNRUN (no GPU host available — see
+# containers/README.md). Equivalent single-command form:
+#   docker run --rm --gpus all -v $(pwd):/src cross_machine_runtime:cuda
+# This compose form is the one worth checking in because a real multi-GPU
+# dev/test loop (build once, run many times, e.g. iterating on one
+# gpu_engine/ kernel) is compose's actual use case over a one-off `docker
+# run`.
+services:
+  cuda_build_test:
+    build:
+      context: ../..
+      dockerfile: docker/gpu/Dockerfile.cuda
+    image: cross_machine_runtime:cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Equivalent to `docker run --gpus all`; requires the "nvidia" runtime
+    # from daemon.json to be registered on the host, and (on older Docker
+    # Engine releases without native `deploy.resources.reservations.devices`
+    # support in `docker compose run`) the explicit runtime line below as
+    # a fallback.
+    runtime: nvidia

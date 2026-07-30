@@ -1,0 +1,60 @@
+# Phase 16 step 3 — GPU passthrough build variant.
+#
+# Status: real, complete, UNRUN (see containers/README.md). Hardware- AND
+# tool-gated on BOTH axes at once: needs (a) a real NVIDIA GPU + the
+# nvidia-container-toolkit runtime registered on the Docker host (see
+# daemon.json in this directory) to ever RUN a container that touches the
+# device, and (b) an actual CUDA toolchain to BUILD gpu_engine/ in the
+# first place — this is the same CUDA gate `gpu_engine/`'s own
+# CMakeLists.txt (`find_package(CUDAToolkit REQUIRED)`) and the root
+# CMakeLists.txt's `check_language(CUDA)` already apply on bare metal;
+# this file just runs that inside a container instead.
+#
+# Differs from the root Dockerfile's `builder` stage in exactly one way:
+# base image. Everything else (apt packages, COPY, preset choice) is
+# intentionally identical so a diff against the root Dockerfile is the
+# whole story, not two independently-drifting build recipes.
+FROM nvidia/cuda:12.6.0-devel-ubuntu24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang \
+    ninja-build \
+    python3 \
+    python3-pip \
+    pkg-config \
+    git \
+    ca-certificates \
+    && pip3 install --break-system-packages --no-cache-dir "cmake>=3.28" \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libprotobuf-dev \
+    protobuf-compiler \
+    libgrpc++-dev \
+    protobuf-compiler-grpc \
+    libflatbuffers-dev \
+    flatbuffers-compiler \
+    libfabric-dev \
+    libbpf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+# `cuda-release` is CMakePresets.json's existing preset (CMAKE_CUDA_ARCHITECTURES
+# = "native", i.e. nvcc detects the GPU actually present at build time —
+# only correct when building ON the target GPU host, which is the normal
+# case for this preset per its own displayName "CUDA Release (Linux + GPU
+# required)"). Use `cuda-ci`'s multi-arch list instead if cross-building
+# for a fleet of different GPU generations (T4/A100/A10G/H100).
+RUN cmake --preset cuda-release -DCMAKE_CXX_COMPILER=clang++
+RUN cmake --build --preset cuda-release
+
+# No separate runtime stage here (unlike the root Dockerfile): a
+# CUDA-capable runtime image still needs the matching nvidia/cuda runtime
+# base plus the host's driver passed through via --gpus, so slimming this
+# further is real future work once step 3 actually has a GPU to validate
+# against, not invented now.
+CMD ["ctest", "--preset", "cuda-release", "--output-on-failure"]
