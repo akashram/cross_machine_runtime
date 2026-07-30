@@ -539,6 +539,61 @@ Phase 13 is now fully code-complete (9/9); no hardware validation is
 needed for this phase (fully CPU-portable, unlike Phases 3/4/5/6/7/8/9's
 GPU/FPGA/TPU/multi-node/eBPF pieces).
 
+**Phase 14: Adversarial Robustness — CODE COMPLETE (8/8 steps including
+the stretch goal, 2026-07-29)**
+Lives in `adversarial/`. Added 2026-07-28, not one of the original 12
+phases. Fully CPU-portable, no hardware gate anywhere: **all 8 steps are
+actually compiled, run, and tested on this Mac**, real captured output in
+each step's own README. Attacks `distributed_training::MLP` (the SAME toy
+classifier `full_training_loop` already trains) via the generic
+reverse-mode tape (`distributed_training/autograd.h`), not the
+transformer — that tape already wraps its input batch in a `Tensor`
+before the forward pass, exactly Goodfellow et al. 2014's original
+continuous-feature setting, and attacking the transformer's discrete
+token ids would need a structurally different (embedding-perturbation)
+approach, a separate scope this phase didn't take on. `input_gradients`
+(step 1, no engine modification needed — the generic tape never
+special-cased parameter vs. input Tensors, so `x.grad()` already worked;
+this step proves it directly via finite differences, median relative
+error 0.0041, and fixes a real correctness detail: `input_gradient()`
+zeros weight grads before every call so PGD's iterative calls can't
+silently accumulate stale ones). `fgsm` (step 2, Goodfellow et al. 2014;
+verified the L-infinity bound is exact and the attack genuinely
+increases loss on a trained model). `pgd` (step 3, Madry et al. 2017;
+verified PGD with `num_steps=1`/`step_size=epsilon` is byte-identical to
+FGSM — a checkable structural relationship, not just argued — and 10-step
+PGD finds a higher loss than one FGSM step at the same budget).
+`vulnerability_measurement` (step 4, a clean accuracy-collapse curve on
+an undefended model: 1.000 -> 0.956 -> 0.756 -> 0.544 -> 0.178 -> 0.011
+FGSM as epsilon grows 0->4.0, PGD always at least as damaging).
+`adversarial_training` (step 5, Madry et al.'s min-max formulation,
+reusing `full_training_loop`'s forward->backward->clip->step shape
+single-process; robust accuracy 0.722 -> 0.844 at `epsilon=1.5` over the
+undefended baseline). `robustness_tradeoff` (step 6, pure composition of
+steps 4/5, zero new attack/training logic; Tsipras et al. 2018's
+robustness-costs-accuracy finding measured directly across a training-
+epsilon sweep — no cost at `epsilon=0.5`, clean accuracy 1.000 -> 0.844 ->
+0.811 as training epsilon grows to 2.5/3.5, while robust accuracy
+improves at every epsilon without exception). `transferability` (step 7,
+adversarial examples crafted against one model transfer to fool a
+differently-sized/differently-initialized one at 37.8%, vs. only 2.2% for
+a same-magnitude random-noise baseline — the 17x gap that establishes
+genuine transfer, not just "large perturbations confuse any model").
+`randomized_smoothing` (step 8, the stretch goal, REACHED not left as a
+scope note — Cohen et al. 2019 certified defense with one disclosed
+simplification, a normal/Wald confidence bound instead of the exact
+Clopper-Pearson bound; every eval point certified with a substantial
+average radius on this well-separated task, and a modest empirical gain
+on PGD-perturbed inputs smaller than adversarial training's gain at a
+comparable epsilon — consistent with smoothing's real value being the
+certificate, not necessarily out-competing a targeted defense at its own
+game). See `adversarial/DESIGN.md` for the full design rationale and two
+disclosed toy-scale limitations (a 2-feature well-separated classifier
+throughout; the Wald-vs-Clopper-Pearson approximation in step 8).
+
+Phase 14 is now fully code-complete (8/8); no hardware validation is
+needed for this phase (fully CPU-portable).
+
 ---
 
 ## Execution strategy (updated 2026-07-19)
@@ -564,22 +619,23 @@ numbers stay TODO until the hardware validation pass.
 
 **Phases 13-16, scoped 2026-07-28/29, are additions beyond the original
 12-phase plan (see PLAN.md).** Same "write all local-implementable code
-before hardware" philosophy applies to them: Phase 13 (RAG) is now
-code-complete and fully locally run (2026-07-29, see above) — no hardware
-gate at all for this phase. Phase 14 (Adversarial Robustness) is also
-fully CPU-portable per its own PLAN.md section and not yet started.
+before hardware" philosophy applies to them: Phase 13 (RAG) and Phase 14
+(Adversarial Robustness) are now BOTH code-complete and fully locally run
+(2026-07-29, see above) — no hardware gate at all for either phase.
 Phase 15 (NPU Backend) mirrors Phase 3/7/8's hardware-gated-but-
 locally-codeable pattern. Phase 16 (Containerized & Orchestrated
 Deployment) is mixed — its Docker/cgroup steps are local, its GPU
 passthrough/Kubernetes-cluster steps are hardware/cluster-gated.
 
-**Next up: Phase 14 (fully local, no hardware needed) is the natural
-next step before the hardware validation pass below** — it's the only
-other newly-scoped phase with zero hardware dependency left unstarted.
-Phases 15/16's local-only pieces could also be picked up first; the
-hardware validation pass itself (GPU/FPGA/TPU/multi-node/eBPF, phases 3-9
-in original order) remains blocked on provisioning cloud hardware, not on
-any further local coding.
+**Next up: Phase 15/16's local-only pieces, or the hardware validation
+pass below.** Phases 13 and 14 — every fully-local newly-scoped phase —
+are done. What's left in the local-implementation order is only the
+locally-codeable SUBSET of Phase 15 (NPU cost model, op-eligibility
+analysis, placement/serving-router integration — all portable per its own
+PLAN.md section) and Phase 16 (Docker image + cgroup interaction
+findings). The hardware validation pass itself (GPU/FPGA/TPU/multi-node/
+eBPF, phases 3-9 in original order) remains blocked on provisioning cloud
+hardware, not on any further local coding.
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
