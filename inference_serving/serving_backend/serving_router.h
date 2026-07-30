@@ -10,21 +10,30 @@
 // PLAN.md Phase 9 step 8: backend-agnostic serving — the inference
 // serving layer works with CPU, GPU, FPGA, and TPU backends via a
 // unified router. Mirrors compiler/dialect's `DeviceKind` enum
-// (CPU/GPU/FPGA/TPU/Unassigned) in spirit, but doesn't depend on it —
+// (CPU/GPU/FPGA/TPU/NPU/Unassigned) in spirit, but doesn't depend on it —
 // that enum lives behind Phase 4's MLIR_DIR gate, and this step's router
 // logic has no MLIR dependency at all.
 //
-// Only the CPU backend can actually execute on this Mac. GPU/FPGA/TPU
+// Only the CPU backend can actually execute on this Mac. GPU/FPGA/TPU/NPU
 // are registered as real backend entries with an honest `available =
 // false` and a reason string — same "hardware-gated but real, not
 // hidden" convention this repo uses everywhere else (e.g. the "CUDA not
 // found" messages root CMakeLists.txt prints) — so the router's
 // fallback logic has real backends to fall back FROM, not just a
 // single-entry table.
+//
+// NPU added 2026-07-28/30 (PLAN.md Phase 15 step 7 /
+// SCOPE.md's "NPU as a fifth ServingRouter backend" note): placed last
+// in the fallback priority order (see route()'s kPriorityOrder) — NPU
+// toolchains (CoreML, ONNX Runtime NPU EPs) are inference-only,
+// edge/mobile-first, and INT8-restricted-operator-model hardware (see
+// npu_engine/op_coverage), not a general datacenter accelerator the way
+// GPU/TPU/FPGA are treated here, so it's the least-preferred fallback
+// rather than competing with them for priority.
 
 namespace inference_serving {
 
-enum class Backend { CPU, GPU, FPGA, TPU };
+enum class Backend { CPU, GPU, FPGA, TPU, NPU };
 
 const char *to_string(Backend b);
 
