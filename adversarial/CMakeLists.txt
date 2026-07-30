@@ -7,3 +7,4 @@
 
 add_subdirectory(task)
 add_subdirectory(input_gradients)
+add_subdirectory(fgsm)
