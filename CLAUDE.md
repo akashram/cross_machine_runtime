@@ -473,9 +473,71 @@ doesn't move. Documented as a real, disclosed property of the datasets,
 not papered over.
 
 Phase 12 is now fully code-complete (18/18). **This completes every
-phase in the local implementation order (1→2→3→4→5→6→7→8→9→10→12)** —
-see the execution strategy below for what's next (the hardware
+phase in the original local implementation order (1→2→3→4→5→6→7→8→9→10→12)**
+— see the execution strategy below for what's next (the hardware
 validation pass, in the same phase order, one hardware type at a time).
+
+**Phase 13: Retrieval-Augmented Generation — CODE COMPLETE (9/9 steps,
+2026-07-29)**
+Lives in `rag/`. Added 2026-07-28, not one of the original 12 phases —
+same kind of addition as the Minimal Transformer note after Phase 6.
+Unlike Phases 3/4/7/8 (hardware-gated), every step here has no GPU/FPGA/
+TPU/Linux dependency at all, so **all 9 steps are actually compiled, run,
+and tested on this Mac**, real captured output in each step's own README.
+`embedding_model` (step 1, a bidirectional encoder — reuses
+`seq_parallel`'s LayerNorm and `tensor_parallel_attn`'s attention
+primitive unmasked, since `transformer_model.h`'s block hard-codes causal
+masking — with mean pooling, a linear projection, and L2 normalize,
+trained via symmetric InfoNCE/CLIP-style contrastive loss; gradient-
+checked, in-batch retrieval accuracy 0.333 -> 1.000 after training; real
+finding: `token_emb`'s finite-difference check needed a tighter epsilon
+than every other parameter, traced to repeated characters within one
+sequence causing a genuine second-order truncation effect, not a
+gradient bug). `cosine_ann` (step 2, lives in `ml/knn/` alongside Phase
+12a's `BallTree` — `CosineBallTree` L2-normalizes points once and
+delegates to `BallTree` unchanged, since ranking by Euclidean distance on
+unit vectors is exactly cosine-similarity ranking; verified directly
+against brute-force cosine ranking, 0/20 queries mismatched). `hnsw`
+(step 3, Malkov & Yashunin 2016, simplified neighbor-selection heuristic,
+benchmarked directly against `BallTree` on the same corpus per PLAN.md's
+own ask; real, honest finding: at n=2000/64 dims, `BallTree`'s EXACT
+search visited fewer distance-evaluated points than HNSW's APPROXIMATE
+search while also being exact — HNSW's asymptotic advantage shows up at
+larger scale than this corpus, not assumed to always win). `indexing_pipeline`
+(step 4, sentence-boundary-aware chunking with overlap + embed + index;
+adds the shared `rag/corpus/corpus.h` fixture — 8 hand-labeled queries
+plus, from step 6 onward, 40 deterministic distractor documents — reused
+by steps 4/6/7/8; 100% top-1 retrieval accuracy end to end). `rag_generation`
+(step 5, prompt construction + generation, composing step 4 with
+`inference_serving::make_cpu_backend()` rather than a third
+reimplementation of greedy decode). `recall_eval` (step 6, recall@1/3/5 =
+1.000 exact vs. 0.875 recall@5 under `BallTree`'s approximate mode over a
+48-document index — the distractor documents exist specifically because
+8 documents made approximate and exact search literally identical, same
+as `leaf_size` making a single-leaf tree in `ml/knn`). `generation_quality`
+(step 7, a causal QA model trained to answer from real retrieved context
+or abstain — generation accuracy 0.000 -> 1.000 with vs. without
+retrieval, plus a ~14.7x teacher-forced-loss gap forcing the true answer
+with vs. without context). `approx_retrieval_study` (step 8, pure
+composition of steps 6/7's own `approximate` flags, zero new logic; real
+finding: the recall drop from approximate retrieval is NOT free at the
+system level — it costs exactly as much generation accuracy as the
+recall drop itself, 0.125 both ways, and doesn't compound).
+`serving_integration` (step 9, `route_rag()` wires retrieval + prompt
+construction into `inference_serving`'s `ServingRouter` as a new request
+path WITHOUT modifying `serving_router.h/.cpp` — Phase 9 stays usable
+with zero Phase 13 dependency; GPU-preferred-with-fallback and
+CPU-preferred-directly produce byte-identical output, confirming
+`route_rag` genuinely delegates rather than duplicating dispatch logic).
+See `rag/DESIGN.md` for the full design rationale, the recall/latency/
+quality tradeoff measured end-to-end across steps 6-8, and two real,
+disclosed toy-scale limitations (lexical- rather than semantic-similarity
+contrastive learning in step 1; memorization- rather than
+generalization-driven QA in step 7).
+
+Phase 13 is now fully code-complete (9/9); no hardware validation is
+needed for this phase (fully CPU-portable, unlike Phases 3/4/5/6/7/8/9's
+GPU/FPGA/TPU/multi-node/eBPF pieces).
 
 ---
 
@@ -500,8 +562,24 @@ order. A step counts as implemented when it has real logic (not a stub)
 and compiles wherever it can without the target hardware; benchmark
 numbers stay TODO until the hardware validation pass.
 
-**Next up: the hardware validation pass below** — no further local
-implementation work remains in the phase order above.
+**Phases 13-16, scoped 2026-07-28/29, are additions beyond the original
+12-phase plan (see PLAN.md).** Same "write all local-implementable code
+before hardware" philosophy applies to them: Phase 13 (RAG) is now
+code-complete and fully locally run (2026-07-29, see above) — no hardware
+gate at all for this phase. Phase 14 (Adversarial Robustness) is also
+fully CPU-portable per its own PLAN.md section and not yet started.
+Phase 15 (NPU Backend) mirrors Phase 3/7/8's hardware-gated-but-
+locally-codeable pattern. Phase 16 (Containerized & Orchestrated
+Deployment) is mixed — its Docker/cgroup steps are local, its GPU
+passthrough/Kubernetes-cluster steps are hardware/cluster-gated.
+
+**Next up: Phase 14 (fully local, no hardware needed) is the natural
+next step before the hardware validation pass below** — it's the only
+other newly-scoped phase with zero hardware dependency left unstarted.
+Phases 15/16's local-only pieces could also be picked up first; the
+hardware validation pass itself (GPU/FPGA/TPU/multi-node/eBPF, phases 3-9
+in original order) remains blocked on provisioning cloud hardware, not on
+any further local coding.
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
