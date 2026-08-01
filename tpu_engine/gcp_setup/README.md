@@ -2,7 +2,9 @@
 
 **Status: code-complete, hardware-gated — real gcloud/JAX code, matching
 Phase 3's convention for GPU code that hasn't run yet. Unrun: no GCP
-project, TPU quota, or TRC grant available from this Mac.**
+project, TPU quota, or TRC grant available from this Mac. `validate_matmul.py`
+itself was actually run on CPU (2026-08-01, JAX 0.4.38 in `.venv/`) — see
+below; it correctly refuses to validate anything, by design.**
 
 ## What this measures
 
@@ -35,6 +37,26 @@ phase)" — it's a manual web form + approval wait, not something this repo
 can automate. Apply before starting Phase 8's hardware validation pass so
 the wait overlaps with other phases' hardware validation instead of
 blocking Phase 8 specifically.
+
+## Local CPU smoke test (2026-08-01)
+
+Ran unmodified against JAX 0.4.38 (CPU backend, `.venv/`):
+`check_devices()` correctly raised `RuntimeError: expected backend 'tpu',
+got 'cpu'` — the gate does exactly what it's designed to do on non-TPU
+hardware, confirming the check itself is correct, not just untested.
+
+`check_correctness()` and `check_throughput()` were then called directly
+(bypassing the gate) as a CPU-only smoke test of the rest of the script:
+
+| Check | Result (CPU, this Mac) |
+|-------|----------------------|
+| matmul 512x512 max abs err vs numpy | 4.196e-05 |
+| matmul 4096x4096 bf16 throughput | 951.6 ms/iter, 0.1 TFLOPS |
+
+0.1 TFLOPS vs. TPU v4's 275 TFLOPS peak is expected and not a finding —
+this Mac's CPU is not the device this script measures. Confirms the JAX
+toolchain and the script's logic both work; the actual step-1 deliverable
+(device visibility + numbers on a real TPU VM) is still TODO.
 
 ## Results
 TODO: run on a GCP TPU VM (TRC grant or paid `v4-8`).

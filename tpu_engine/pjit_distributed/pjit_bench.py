@@ -86,7 +86,8 @@ def main(batch: int = 4096, d_model: int = 4096, d_ff: int = 16384) -> None:
     # measured against.
     baseline_mesh = build_mesh(data_axis=n, model_axis=1)
     baseline_fn, baseline_args = sharded_mlp_step(baseline_mesh, batch, d_model, d_ff)
-    baseline_latency = bench(baseline_fn, baseline_args)
+    with baseline_mesh:
+        baseline_latency = bench(baseline_fn, baseline_args)
     flops = 2 * 2 * batch * d_model * d_ff  # up-proj + down-proj
     baseline_tflops = flops / baseline_latency / 1e12
     print(f"data={n} model=1 (baseline): {baseline_latency * 1e3:.3f} ms/iter, "
@@ -97,7 +98,8 @@ def main(batch: int = 4096, d_model: int = 4096, d_ff: int = 16384) -> None:
         data_axis = n // model_axis
         mesh = build_mesh(data_axis=data_axis, model_axis=model_axis)
         fn, args = sharded_mlp_step(mesh, batch, d_model, d_ff)
-        latency = bench(fn, args)
+        with mesh:
+            latency = bench(fn, args)
         tflops = flops / latency / 1e12
         scaling_eff = 100.0 * tflops / baseline_tflops
         print(f"data={data_axis} model={model_axis}: {latency * 1e3:.3f} ms/iter, "

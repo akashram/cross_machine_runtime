@@ -1,7 +1,11 @@
 # tpu_profiler
 
-**Status: code-complete, hardware-gated — real JAX profiler script, unrun.
-No TPU device on this Mac.**
+**Status: code-complete, hardware-gated for the real TPU trace — still
+unrun there. Actually run on CPU (2026-08-01, JAX 0.4.38, `.venv/`, 4
+simulated devices, much smaller sizes than the real defaults) — see below.
+A CPU trace can't show MXU/HBM/ICI bottleneck signatures (none of those
+subsystems exist the same way on CPU), so this confirms the capture
+mechanism works, not any bottleneck finding.**
 
 ## What this measures
 
@@ -26,6 +30,22 @@ bottlenecks, HBM saturation, ICI contention.
   that already predict what they'd show (layout_opt/hbm_sram's ceilings
   for MXU/HBM, hbm_sram's overlap-efficiency framing applied to ICI
   contention specifically).
+
+## Local CPU smoke test (2026-08-01)
+
+`main(trace_dir='/tmp/tpu_profiler_trace', batch=256, d_model=256,
+d_ff=512, steps=5)` with 4 simulated CPU devices
+(`XLA_FLAGS=--xla_force_host_platform_device_count=4`, mesh
+data=1/model=4): captured 5 steps in 1.009s, trace written successfully to
+`/tmp/tpu_profiler_trace`. Confirms `jax.profiler.trace()` plus the
+sharded-MLP workload both run correctly together end to end (same pjit
+sharding code as `pjit_distributed`, same mesh-context fix applies since
+this script already had the `pjit` call correctly inside `with mesh:`).
+Trace wasn't opened in TensorBoard (no `tensorboard-plugin-profile`
+installed) — and even if it were, a CPU trace has no MXU/HBM/ICI signal to
+find, since none of those TPU-specific subsystems are being exercised.
+The step's actual deliverable (real bottleneck findings from a real TPU
+trace) stays TODO.
 
 ## Results
 TODO: run on a GCP TPU v4-8 VM, open the trace in TensorBoard, and fill in

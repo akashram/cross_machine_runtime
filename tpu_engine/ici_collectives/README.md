@@ -1,7 +1,11 @@
 # ici_collectives
 
-**Status: code-complete, hardware-gated — real JAX script, unrun. No
-multi-chip TPU slice, and no local JAX install.**
+**Status: code-complete, hardware-gated for the real TPU number — still
+unrun there. JAX is now installed locally (2026-08-01, `jax==0.4.38`) and
+`bench_grad_allreduce` was run directly for the smallest (125M-param)
+class with 2 simulated CPU devices — see below. The 1.3B/7B classes were
+skipped: this Mac has 8GB total RAM, and those classes need 5-14GB+ per
+simulated device, which real TPU HBM has and this Mac doesn't.**
 
 ## What this measures
 
@@ -33,6 +37,25 @@ representative of real interconnect throughput. It's a documented floor,
 not a fair comparison point. A real ICI-vs-EFA comparison needs this step
 run on a TPU slice *and* `networking/`'s EFA steps run on real
 EFA-equipped nodes — both hardware-gated, neither done yet.
+
+## Local CPU smoke test (2026-08-01)
+
+`bench_grad_allreduce(125_000_000, iters=10)` called directly with 2
+simulated CPU devices (`XLA_FLAGS=--xla_force_host_platform_device_count=2`):
+
+| Model class | Params | Latency | GB/s |
+|---|---|---|---|
+| 125M-param-class | 125M | 1216.9 ms | 0.21 |
+
+Two simulated devices timesharing this Mac's 2 physical cores is nowhere
+near real chip-to-chip ICI, so this latency/bandwidth number is not
+comparable to the TPU number this step needs, or even to
+`ici_latency_bench.py`'s own CPU smoke-test numbers (different payload
+shape, different device count). What it does confirm: the `pmap`+`psum`
+gradient-allreduce code path executes correctly end to end on a real
+(if tiny) multi-device payload. 1.3B/7B-param classes are not locally
+runnable at all — even 2 devices at that size exceeds this Mac's 8GB RAM,
+which is itself a real, disclosed limitation, not a bug.
 
 ## Results
 TODO: run on a GCP TPU v4-8 VM.

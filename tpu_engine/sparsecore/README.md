@@ -1,9 +1,13 @@
 # sparsecore
 
-**Status: code-complete, hardware/toolchain-gated — unrun. TPU v5 only
-(SparseCore doesn't exist on v4, so this is a stricter hardware requirement
-than the rest of Phase 8, which mostly targets v4). No TPU v5, no
-`jax-tpu-embedding` install, no GPU for the dense comparison.**
+**Status: code-complete, hardware/toolchain-gated — the SparseCore half
+stays unrun (TPU v5 only; SparseCore doesn't exist on v4, a stricter
+hardware requirement than the rest of Phase 8). No TPU v5, no
+`jax-tpu-embedding` install, no GPU for the dense comparison. The dense
+gather half was actually run on CPU (2026-08-01, JAX 0.4.38, `.venv/`) —
+see below; it's not the GPU number this step asks for, but it is a real
+measurement of real code, unlike the SparseCore sketch which correctly
+raises `NotImplementedError`.**
 
 ## What this measures
 
@@ -28,6 +32,21 @@ compared against dense embedding on GPU.
   callable — this library's API surface is less stable than core JAX, so
   pretending it's drop-in callable here would be actively misleading
   about what "code-complete" means for this one step.
+
+## Local CPU smoke test (2026-08-01)
+
+`main()` run unmodified (vocab=1,000,000, dim=256, batch=8192):
+
+| Path | Latency | Bandwidth |
+|---|---|---|
+| Dense gather (CPU, this Mac) | 823.9 us | 5.09 GB/s |
+
+Confirms the gather-based baseline is real, correct, working code — not
+the GPU number PLAN.md step 13 actually asks for as the comparison point,
+but a genuine measurement to have on hand once a GPU number exists (a CPU
+vs. GPU vs. SparseCore three-way comparison becomes possible with zero
+new code, same as this repo's other "portable half already measured"
+steps).
 
 ## Results
 TODO: run `bench_dense_lookup` on a GPU instance for the real dense-GPU

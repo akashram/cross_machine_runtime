@@ -1,9 +1,12 @@
 # vliw_analysis
 
-**Status: script done, toolchain/hardware-gated for real output — unrun.
-Design analysis below is written from documented TPU architecture (the TPU
-v4 paper describes the vector unit's VLIW ISA), to be checked against real
-dumped text once available, not against unverifiable numbers.**
+**Status: script done, toolchain/hardware-gated for the TPU-specific output
+— the TPU number stays unrun. Now actually run on CPU (2026-08-01, JAX
+0.4.38 in `.venv/`, see below) as a smoke test of the JAX toolchain itself,
+not a substitute for the TPU measurement. Design analysis below is written
+from documented TPU architecture (the TPU v4 paper describes the vector
+unit's VLIW ISA), to be checked against real dumped text once available,
+not against unverifiable numbers.**
 
 ## What this measures
 
@@ -43,6 +46,26 @@ issue-level version of the same architectural philosophy: TPUs push
 scheduling decisions other architectures make in hardware, at runtime,
 into the compiler, at compile time, in exchange for silicon spent on more
 MXU/vector throughput instead of scheduling logic.
+
+## Local CPU smoke test (2026-08-01)
+
+Ran `dump_hlo.py` unmodified against JAX 0.4.38 (CPU backend, `.venv/`).
+Both dumps produced real output:
+- The backend-agnostic HLO (`compiler_ir(dialect="hlo").as_hlo_text()`) is
+  the clean, unfused `dot -> broadcast -> add -> maximum` graph expected.
+- The "compiled executable text" (`compile().as_text()`) turned out to be a
+  **scheduled, fused HLO module** (bf16<->f32 converts folded together, a
+  `parallel_maximum_convert_fusion` kernel, `outer_dimension_partitions`
+  backend_config annotations for CPU multi-threading) — this docstring's
+  prediction that CPU output "would show LLVM IR structure instead" is
+  slightly off; XLA's CPU backend's `as_text()` still emits HLO-level text,
+  just post-fusion/post-scheduling, not literal LLVM IR. Doesn't change the
+  step's conclusion (no VLIW bundle structure is visible either way on
+  CPU), just a minor correction to the design note above, not yet fixed in
+  the docstring itself.
+
+This confirms the JAX trace/lower/compile pipeline itself works end to
+end; it is not the TPU-backend measurement this step still needs.
 
 ## Results
 TODO: run `dump_hlo.py` on a GCP TPU VM and confirm the compiled text
