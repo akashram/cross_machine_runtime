@@ -748,29 +748,48 @@ finding). See `analog_engine/README.md`/`DESIGN.md` for the full
 phase-level writeup.
 
 **Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures —
-6/10 steps complete, in progress.** Lives in `sciml/`, fully CPU-portable,
-no hardware gate. `ode_solver` (step 1, explicit Euler/RK4/backward Euler
-verified against closed-form solutions; RK4's measured convergence order
-16.11x per dt-halving vs. theoretical 16x). `stiffness` (step 2, forward
-Euler's exact stability boundary measured to hold precisely; Van der
-Pol's stiffness ratio measured to grow from complex eigenvalues at mu=1
-to a ~2498 real-eigenvalue ratio at mu=50). `sde_solver` (step 3,
-Euler-Maruyama/Milstein on pre-generated shared Brownian paths; empirical
-strong-convergence order landed almost exactly on theory, and Milstein
-verified to reduce to Euler-Maruyama exactly for additive noise).
-`neural_ode` (step 4, adjoint-method gradients reusing `rk4` for both
-forward and backward passes; caught and fixed a real sign bug via the
-finite-difference gradient check — every parameter's relative error was
-exactly 2.0 before the fix). `deq` (step 5, implicit-function-theorem
-backprop through a fixed point, reusing `ode_solver.h`'s linear solve; no
-sign bug this time, gradient check passed on the first run). `ssm_layer`
-(step 6, a generic non-HiPPO linear SSM vs. a directly-implemented
-self-attention layer, both trained via finite-difference GD; op-count
-scaling measured almost exactly on theory, and attention beats the
-generic SSM on a long-range copy task — the literature-motivated reason
-S4's real contribution is HiPPO initialization, not just a linear
-recurrence). Steps 7-10 (diffusion/flow-matching, energy-based models,
-muP scaling study, noise-aware training bridge into Phase 17) remain.
+CODE COMPLETE (10/10 steps, 2026-08-09).** Lives in `sciml/`, fully
+CPU-portable, no hardware gate. `ode_solver` (step 1, explicit Euler/RK4/
+backward Euler verified against closed-form solutions; RK4's measured
+convergence order 16.11x per dt-halving vs. theoretical 16x). `stiffness`
+(step 2, forward Euler's exact stability boundary measured to hold
+precisely; Van der Pol's stiffness ratio measured to grow from complex
+eigenvalues at mu=1 to a ~2498 real-eigenvalue ratio at mu=50).
+`sde_solver` (step 3, Euler-Maruyama/Milstein on pre-generated shared
+Brownian paths; empirical strong-convergence order landed almost exactly
+on theory, and Milstein verified to reduce to Euler-Maruyama exactly for
+additive noise). `neural_ode` (step 4, adjoint-method gradients reusing
+`rk4` for both forward and backward passes; caught and fixed a real sign
+bug via the finite-difference gradient check — every parameter's relative
+error was exactly 2.0 before the fix). `deq` (step 5, implicit-function-
+theorem backprop through a fixed point, reusing `ode_solver.h`'s linear
+solve; no sign bug this time, gradient check passed on the first run).
+`ssm_layer` (step 6, a generic non-HiPPO linear SSM vs. a directly-
+implemented self-attention layer, both trained via finite-difference GD;
+op-count scaling measured almost exactly on theory, and attention beats
+the generic SSM on a long-range copy task — the literature-motivated
+reason S4's real contribution is HiPPO initialization, not just a linear
+recurrence). `diffusion` (step 7, a real trained DDPM on a toy two-cluster
+2D distribution; 200 generated samples split 94/106 across the clusters,
+not mode-collapsed). `ebm` (step 8, contrastive divergence with short-run
+Langevin MCMC, retraining step 7's exact diffusion model in the same
+binary for a direct comparison; diffusion clearly won, 1.04 vs. 2.36 mean
+distance to true cluster centers — a real, literature-consistent result,
+not a bug). `mup_scaling` (step 9, muP's output-layer-LR-scaling claim
+tested directly across widths 4/8/16; muP's best LR landed at exactly 1.0
+at all three widths with no tuning to force it, while SP's best LR
+shifted 0.3->0.3->0.1, plus muP diverging at fewer (width,LR) points,
+2/15 vs. SP's 7/15). `noise_aware_training` (step 10, training through
+Phase 17 step 1's real device-noise model, mirroring Phase 14's
+adversarial training; caught a real bug — naive finite-differencing
+through the quantization+noise pipeline diverged catastrophically,
+exactly why real QAT needs a Straight-Through Estimator, fixed by
+differentiating w.r.t. the already-noisy weights instead — then a second
+real finding that the robustness benefit needed a stronger noise regime
+before becoming measurable, ending in a clean echo of Phase 14's own
+robustness/accuracy tradeoff: noisy loss cut ~45% at a real clean-accuracy
+cost). See `sciml/README.md`/`DESIGN.md` for the full phase-level
+writeup.
 **Phase 19: Framework-Native Training (PyTorch/JAX) — not yet started.**
 Lives in `framework_native/`. The one gap that isn't about a new topic but
 about tooling: this repo demonstrates the underlying concepts (autograd,
@@ -830,13 +849,12 @@ hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
 measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
 and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: Phases 18-19, then the hardware validation pass below.** Every
+**Next up: Phase 19, then the hardware validation pass below.** Every
 phase in the original local-implementation order (1-10, 12-16) is
-code-complete, and Phase 17 (Analog & Unconventional Compute Hardware,
-scoped 2026-08-09) joined them as fully code-complete on the same day.
-Phase 18 (SciML) is 6/10 steps in; Phase 19 (framework-native training)
+code-complete, and Phases 17 and 18 (both scoped 2026-08-09) joined them
+as fully code-complete the same day. Phase 19 (framework-native training)
 hasn't started (PyTorch/Ray now installed, Lightning/DeepSpeed pending).
-After both are code-complete, what's left across the
+After it's code-complete, what's left across the
 entire project is: (a) the hardware validation pass itself (GPU/FPGA/TPU/
 multi-node/eBPF, phases 3-9 in original order, plus Phase 3's new
 Triton/CUTLASS steps), blocked on provisioning cloud hardware; (b) Phase
