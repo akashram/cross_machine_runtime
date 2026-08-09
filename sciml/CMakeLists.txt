@@ -6,3 +6,4 @@ cmake_minimum_required(VERSION 3.25)
 # MLIR/hardware dependency for any step.
 
 add_subdirectory(ode_solver)
+add_subdirectory(stiffness)
