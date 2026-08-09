@@ -9,15 +9,23 @@ README.md/DESIGN.md and grepping every source comment in the repo for actual
 citations, then filling gaps with the general background those citations
 assume.
 
+**Structure:** split by phase, then by individual PLAN.md build-order step —
+every step in every phase gets its own line, even the ones with no external
+citation (marked explicitly as "no dedicated citation," not silently
+omitted), so this doubles as a completeness check against PLAN.md's build
+order. Nothing from the earlier phase-level version of this document was
+dropped in the split — every citation below appeared in that version too,
+just consolidated under a phase instead of a step.
+
 ## How to use this
 
 - Read in the order below — it's PLAN.md's phase order, which is also the
   dependency order (Phase 6 reuses Phase 5's collectives, Phase 9 reuses
   Phase 6's transformer, Phase 13 reuses Phase 6+9, etc.).
-- For each phase: read the "Start here" in-repo docs first, skim the step
-  table to know what exists, then read external sources only for the steps
-  you actually want to go deep on — you don't need every paper to understand
-  the repo, only the ones behind steps you're studying closely.
+- For each phase: read the "Start here" in-repo docs first, then walk the
+  step list — most steps have no external citation at all (they're API
+  mechanics, glue code, or measurement/analysis steps), so treat "no
+  dedicated citation" as a signal to move on, not a gap to fill.
 - **The in-repo docs are the primary source.** Every step's own README.md
   documents what was actually built and what was actually measured (or, for
   hardware-gated steps, what's still TODO) — the papers below are the
@@ -30,10 +38,9 @@ assume.
   batch of analog/physics-based-AI-compute job descriptions: analog/
   unconventional compute hardware, dynamical-systems/SciML and the
   "unconventional" model architectures those roles build, and genuine
-  PyTorch/JAX framework fluency. Their sections below have no in-repo doc
-  pointers yet (there's no code to point to) — they're pure background
-  reading to have in hand before that code gets written, and will gain
-  "Start here" pointers once each step exists.
+  PyTorch/JAX framework fluency. Their steps have no in-repo doc pointers
+  yet (there's no code to point to) — they're pure background reading to
+  have in hand before that code gets written.
 
 ---
 
@@ -67,110 +74,92 @@ The whole repo assumes working knowledge of:
 
 ## Phase 1: Foundation — lock-free data structures, allocators, coroutines
 
-**Start here:** `foundation/DESIGN.md`, `foundation/README.md` (if present),
-each subdirectory's own README.md.
+**Start here:** `foundation/DESIGN.md`, each subdirectory's own README.md.
 
-| Directory | Topic |
-|---|---|
-| `foundation/chase_lev/` | Work-stealing deque |
-| `foundation/mpmc_queue.h`, `foundation/freelist/` | Lock-free MPMC queue, freelist allocator |
-| `foundation/hazard/` | Hazard pointers |
-| `foundation/epoch/` | Epoch-based reclamation |
-| `foundation/rcu/` | Userspace RCU |
-| `foundation/aba/` | ABA problem demonstration |
-| `foundation/arena/` | Arena allocator |
-| `foundation/coro/` | C++20 coroutine engine |
-| `foundation/ws_pool/` | Work-stealing thread pool |
-| `foundation/proptest*` | Property-based testing framework |
-| `foundation/perf/` | Hardware performance-counter infrastructure |
+- **Step 1 — CMake project skeleton**: no dedicated citation (build-system mechanics).
+- **Step 2 — Statistical benchmarking harness**: no dedicated citation (TSC/RDTSC timing mechanics).
+- **Step 3 — SPSC ring buffer**: no dedicated citation.
+- **Step 4 — MPMC ring buffer**: no dedicated citation (CAS-based array queue; distinct from step 10's linked-list Michael-Scott queue).
+- **Step 5 — ABA problem** (`foundation/aba/`): no dedicated citation in-repo; see the Herlihy & Shavit background below for the standard treatment.
+- **Step 6 — Hazard pointers** (`foundation/hazard/`): Michael, M. (2004), *"Hazard Pointers: Safe Memory Reclamation for Lock-Free Objects"*.
+- **Step 7 — Epoch-based reclamation** (`foundation/epoch/`): no dedicated citation in-repo; see the Herlihy & Shavit background below.
+- **Step 8 — RCU (Read-Copy-Update)** (`foundation/rcu/`): Desnoyers, M. et al. (2012), *"User-Level Implementations of Read-Copy Update"* — `foundation/rcu/rcu_domain.h` cites this directly ("based on URCU, Desnoyers et al. 2012") for the per-thread-counter algorithm.
+- **Step 9 — Lock-free freelist** (`foundation/freelist/`): no separate citation — built on step 6's hazard pointers for safe reclamation.
+- **Step 10 — Lock-free queue (Michael-Scott)** (`foundation/mpmc_queue.h`): Michael, M. & Scott, M. (1996), *"Simple, Fast, and Practical Non-Blocking and Blocking Concurrent Queue Algorithms"*.
+- **Step 11 — Chase-Lev work-stealing deque** (`foundation/chase_lev/`): Chase, D. & Lev, Y. (2005), *"Dynamic Circular Work-Stealing Deque"* — `chase_lev.h` implements this directly.
+- **Step 12 — Work-stealing thread pool** (`foundation/ws_pool/`): no separate citation — built directly on step 11's deque.
+- **Step 13 — Coroutine execution engine** (`foundation/coro/`): Baker, L., cppcoro (CppCon 2019 talk) — `coro.h` cites this directly for the `AsyncMutex` design.
+- **Step 14 — Arena allocator** (`foundation/arena/`): no dedicated citation.
+- **Step 15 — NUMA-aware allocator**: no dedicated citation.
+- **Step 16 — Unified tensor handle (v1)** (`foundation/tensor/`): no dedicated citation.
+- **Step 17 — Property-based testing setup** (`foundation/proptest*`): Claessen, K. & Hughes, J. (2000), *"QuickCheck: A Lightweight Tool for Random Testing of Haskell Programs"* — the paradigm `foundation/proptest` implements in C++.
+- **Step 18 — x86 hardware counter infrastructure** (`foundation/perf/`): no dedicated citation (uses `perf_event_open()` directly; see the Intel manual under Phase 2 for the counters themselves).
 
-**Primary sources:**
-- Chase, D. & Lev, Y. (2005), *"Dynamic Circular Work-Stealing Deque"* — the
-  algorithm `foundation/chase_lev/chase_lev.h` implements directly.
-- Michael, M. & Scott, M. (1996), *"Simple, Fast, and Practical Non-Blocking
-  and Blocking Concurrent Queue Algorithms"` — the lineage `mpmc_queue.h`
-  descends from.
-- Desnoyers, M. et al. (2012), *"User-Level Implementations of Read-Copy
-  Update"* — `foundation/rcu/rcu_domain.h` cites this directly ("based on
-  URCU, Desnoyers et al. 2012") for the per-thread-counter algorithm.
-- Michael, M. (2004), *"Hazard Pointers: Safe Memory Reclamation for
-  Lock-Free Objects"* — background for `foundation/hazard/`.
-- Baker, L., cppcoro (CppCon 2019 talk) — `foundation/coro/coro.h` cites this
-  directly for the `AsyncMutex` design.
-- Claessen, K. & Hughes, J. (2000), *"QuickCheck: A Lightweight Tool for
-  Random Testing of Haskell Programs"* — the property-based-testing paradigm
-  `foundation/proptest` implements in C++.
-
-**Background:** Herlihy, M. & Shavit, N., *The Art of Multiprocessor
-Programming* — the standard textbook covering ABA, hazard pointers, and
-work-stealing in one place; useful as connective tissue between the papers
-above.
+**Background (applies across steps 5-11):** Herlihy, M. & Shavit, N., *The
+Art of Multiprocessor Programming* — the standard textbook covering ABA,
+hazard pointers, epoch reclamation, and work-stealing in one place; useful
+connective tissue between the papers above and for the steps that have no
+dedicated citation of their own.
 
 ---
 
 ## Phase 2: CPU Backend — affinity, SIMD, tiling, inference engine
 
-**Start here:** `cpu_engine/DESIGN.md`, per-step READMEs (`affinity/`,
-`hugepage/`, `os_tuning/`, `avx512/`, `branchless/`, `nt_store/`,
-`prefetch/`, `tiling/`, `inference/`, `roofline/`, `perf_deep_dive/`,
-`pgo/`, `busy_poll/`).
+**Start here:** `cpu_engine/DESIGN.md`.
 
-**Primary sources:**
-- Williams, S., Waterman, A. & Patterson, D. (2009), *"Roofline: An
-  Insightful Visual Performance Model for Multicore Architectures"* —
-  `cpu_engine/roofline/roofline.h` and `gpu_engine/roofline/roofline.h` both
-  cite this directly; the roofline model is the standard "is this kernel
-  compute-bound or memory-bound" lens used across CPU, GPU, and TPU phases.
-- Intel 64 and IA-32 Architectures Optimization Reference Manual — AVX-512
-  instruction latencies/throughput, used for `avx512/`.
-- Drepper, U. (2007), *"What Every Programmer Should Know About Memory"* —
-  hugepages, NUMA, prefetching background for `hugepage/`, `prefetch/`.
-
-**Background:** PGO (`pgo/`) assumes familiarity with profile-guided
-compilation (`-fprofile-generate`/`-fprofile-use`); busy-polling (`busy_poll/`)
-assumes familiarity with the latency/CPU-utilization tradeoff vs. blocking
-syscalls (`epoll`/`futex`).
+- **Step 1 — CPU affinity + thread pinning** (`affinity/`): no dedicated citation.
+- **Step 2 — Hugepage allocator** (`hugepage/`): Drepper, U. (2007), *"What Every Programmer Should Know About Memory"*.
+- **Step 3 — OS-level tuning scripts** (`os_tuning/`): no dedicated citation.
+- **Step 4 — Non-temporal store primitives** (`nt_store/`): no dedicated citation.
+- **Step 5 — Prefetch primitives** (`prefetch/`): Drepper, U. (2007) (same as step 2).
+- **Step 6 — Branchless primitives** (`branchless/`): no dedicated citation.
+- **Step 7 — AVX-512 kernel library** (`avx512/`): Intel 64 and IA-32 Architectures Optimization Reference Manual — instruction latencies/throughput.
+- **Step 8 — Cache-aware tiling** (`tiling/`): no dedicated citation.
+- **Step 9 — CPU inference engine** (`inference/`): no dedicated citation.
+- **Step 10 — Roofline model (CPU)** (`roofline/`): Williams, S., Waterman, A. & Patterson, D. (2009), *"Roofline: An Insightful Visual Performance Model for Multicore Architectures"* — cited directly by `roofline.h`; the standard "compute-bound vs. memory-bound" lens reused in Phases 3 and 8.
+- **Step 11 — Hardware perf counter deep dive** (`perf_deep_dive/`): no dedicated citation.
+- **Step 12 — Profile-guided optimization (PGO)** (`pgo/`): no dedicated citation; assumes familiarity with profile-guided compilation (`-fprofile-generate`/`-fprofile-use`).
+- **Step 13 — Busy-poll vs OS-wait comparison** (`busy_poll/`): no dedicated citation; assumes familiarity with the latency/CPU-utilization tradeoff vs. blocking syscalls (`epoll`/`futex`).
 
 ---
 
 ## Phase 3: GPU Backend — CUDA (code-complete, hardware-gated)
 
-**Start here:** `gpu_engine/DESIGN.md`, per-step READMEs. None of this phase
-has run on real hardware (no CUDA toolchain on Mac) — every README's
-`## Results` is `TODO: run on [hardware]`.
+**Start here:** `gpu_engine/DESIGN.md`. None of this phase has run on real
+hardware (no CUDA toolchain on Mac) — every README's `## Results` is
+`TODO: run on [hardware]`.
 
-| Directory | Topic |
-|---|---|
-| `warp_primitives/`, `coalescing/`, `occupancy/` | Warp shuffle/vote, memory coalescing, occupancy tuning |
-| `kernels/` | Elementwise + GEMM kernels |
-| `ptx_sass/` | PTX/SASS inspection |
-| `flash_attn/` | Flash attention |
-| `graphs/` | CUDA graphs |
-| `p2p/` | Peer-to-peer transfers |
-| `precision/` | Mixed precision, FP8, tensor-core alignment |
-| `hopper/` | Hopper TMA/WGMMA |
-| `sparsity/` | 2:4 structured sparsity |
-| `roofline/`, `mps/`, `power/`, `nsight_ci/` | Roofline, MPS, NVML power monitoring, Nsight CI |
+- **Step 1 — CUDA project integration**: no dedicated citation; see *CUDA C++ Programming Guide* under Vendor docs.
+- **Step 2 — GPU memory management**: no dedicated citation.
+- **Step 3 — Stream manager**: no dedicated citation.
+- **Step 4 — Warp-level primitives library** (`warp_primitives/`): no dedicated citation.
+- **Step 5 — Shared memory primitives**: no dedicated citation.
+- **Step 6 — Memory coalescing validator** (`coalescing/`): no dedicated citation.
+- **Step 7 — Occupancy tuner** (`occupancy/`): no dedicated citation.
+- **Step 8 — Elementwise GPU kernels** (`kernels/`): no dedicated citation.
+- **Step 9 — GEMM kernel** (`kernels/`): no dedicated citation.
+- **Step 10 — PTX/SASS inspection workflow** (`ptx_sass/`): no dedicated citation; see *PTX ISA* under Vendor docs.
+- **Step 11 — Flash Attention forward kernel** (`flash_attn/`): Dao, T., Fu, D., Ermon, S., Rudra, A. & Ré, C. (2022), *"FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness"* — cited directly by `flash_attn/README.md`; Milakov, M. & Gimelshein, N. (2018), *"Online normalizer calculation for softmax"* — the running-max/normalizer trick, also cited directly, used inside the kernel.
+- **Step 12 — Flash Attention backward kernel** (`flash_attn/`): Dao et al. (2022), same paper — covers the recomputation-based backward pass too.
+- **Step 13 — CUDA Graphs** (`graphs/`): no dedicated citation.
+- **Step 14 — GPUDirect P2P** (`p2p/`): no dedicated citation.
+- **Step 15 — Mixed precision** (`precision/`): Micikevicius, P. et al. (2017), *"Mixed Precision Training"*.
+- **Step 16 — FP8 (Hopper)** (`precision/`/`hopper/`): no separate citation beyond step 15's mixed-precision background.
+- **Step 17 — Tensor Core alignment analysis** (`precision/`): no dedicated citation.
+- **Step 18 — Hopper TMA** (`hopper/`): NVIDIA, *Hopper Architecture Whitepaper*.
+- **Step 19 — Hopper WGMMA** (`hopper/`): NVIDIA, *Hopper Architecture Whitepaper* (same as step 18).
+- **Step 20 — 2:4 structured sparsity** (`sparsity/`): no dedicated citation (implementation target is `cusparseLtMatmul`).
+- **Step 21 — Roofline model (GPU)** (`roofline/`): Williams, Waterman & Patterson (2009), same as Phase 2 step 10.
+- **Step 22 — CUDA MPS setup** (`mps/`): no dedicated citation.
+- **Step 23 — NVML power monitoring** (`power/`): no dedicated citation.
+- **Step 24 — Nsight integration in CI** (`nsight_ci/`): no dedicated citation.
+- **Step 25 — Triton kernels** (added 2026-08-09, not yet built): no dedicated citation; see Triton language docs under Vendor docs.
+- **Step 26 — CUTLASS GEMM** (added 2026-08-09, not yet built): no dedicated citation; see CUTLASS docs under Vendor docs.
 
-**Primary sources:**
-- Dao, T., Fu, D., Ermon, S., Rudra, A. & Ré, C. (2022), *"FlashAttention:
-  Fast and Memory-Efficient Exact Attention with IO-Awareness"* —
-  `gpu_engine/flash_attn/README.md` cites this directly.
-- Milakov, M. & Gimelshein, N. (2018), *"Online normalizer calculation for
-  softmax"* — the running-max/normalizer online-softmax trick
-  `flash_attn/README.md` also cites, used inside the flash-attention kernel.
-- Micikevicius, P. et al. (2017), *"Mixed Precision Training"* — background
-  for `precision/mixed_precision.h`.
-- NVIDIA, *CUDA C++ Programming Guide* — the primary reference for streams,
-  warp primitives, occupancy, and graphs.
-- NVIDIA, *Parallel Thread Execution (PTX) ISA* — needed to read
-  `ptx_sass/`'s output.
-- NVIDIA, *Hopper Architecture Whitepaper* — TMA/WGMMA background for
-  `hopper/`.
-
-**Vendor docs:** CUDA Programming Guide, PTX ISA reference, `nvcc` docs,
-Nsight Compute/Systems docs, NVML API reference — all needed once this phase
-is validated on real hardware.
+**Vendor docs (map to the steps above):** *CUDA C++ Programming Guide*
+(steps 1-3, 6-7, 13-14), *Parallel Thread Execution (PTX) ISA* (step 10),
+Nsight Compute/Systems docs (steps 6-7, 24), NVML API reference (step 23) —
+all needed once this phase is validated on real hardware.
 
 ---
 
@@ -181,31 +170,21 @@ is validated on real hardware.
 `clang++`); everything else needs an LLVM/MLIR toolchain build, deferred to
 Linux hardware validation.
 
-| Directory | Topic |
-|---|---|
-| `dialect/` | `runtime` dialect: 15 ops, 3 attrs, TableGen |
-| `shape_inference/`, `fusion/`, `affine_lower/` | Shape inference, op fusion, affine lowering/tiling |
-| `mem_planning/`, `remat/` | Memory planning, rematerialization |
-| `placement/`, `sharding/` | Device placement, auto-sharding |
-| `kernel_spec/` | Kernel specialization |
-| `aot/` | AOT pipeline: orchestrates all passes + LLVM codegen + link |
-| `cost_model/` | Device cost model (the one piece actually run locally) |
-| `fuzzing/`, `upstream/`, `mlir_setup/` | Compiler fuzzing, upstream MLIR notes, toolchain setup |
-
-**Primary sources:**
-- Lattner, C. et al. (2021), *"MLIR: Scaling Compiler Infrastructure for
-  Domain Specific Computation"* (CGO 2021) — the foundational paper for the
-  whole phase's IR design (TableGen ops, dialect conversion, pass
-  pipelines).
-- Chris Lattner & Vikram Adve, *"LLVM: A Compilation Framework for Lifelong
-  Program Analysis & Transformation"* (CGO 2004) — LLVM codegen background
-  for the AOT pipeline's backend.
-
-**Background:** rematerialization (`remat/`) draws on the classic
-register-allocation-by-graph-coloring / spill-cost literature (Chaitin et
-al.); auto-sharding (`sharding/`) parallels GSPMD/Megatron-style sharding
-annotations (see Phase 6's Megatron-LM references below — same idea applied
-at the compiler-IR level instead of the model-code level).
+- **Step 1 — MLIR build setup**: no dedicated citation; read Lattner et al. (2021) below before starting this step.
+- **Step 2 — Runtime dialect design** (`dialect/`): Lattner, C. et al. (2021), *"MLIR: Scaling Compiler Infrastructure for Domain Specific Computation"* (CGO 2021) — the foundational paper for the whole phase's IR design (TableGen ops, dialect conversion, pass pipelines).
+- **Step 3 — Dialect registration + parsing**: Lattner et al. (2021), same paper (covers TableGen ODS directly).
+- **Step 4 — Shape inference pass** (`shape_inference/`): no dedicated citation.
+- **Step 5 — Operator fusion pass** (`fusion/`): no dedicated citation.
+- **Step 6 — Affine dialect lowering** (`affine_lower/`): no dedicated citation beyond Lattner et al. (2021)'s coverage of MLIR's existing Affine dialect.
+- **Step 7 — Memory planning pass** (`mem_planning/`): no dedicated citation.
+- **Step 8 — Rematerialization pass** (`remat/`): no dedicated citation; draws on the classic register-allocation-by-graph-coloring/spill-cost literature (Chaitin et al.) as background.
+- **Step 9 — Device placement pass** (`placement/`): no dedicated citation.
+- **Step 10 — Auto-sharding pass** (`sharding/`): no dedicated citation; parallels GSPMD/Megatron-style sharding annotations — see Phase 6 step 11's Megatron-LM citation for the same idea applied at the model-code level instead of the compiler-IR level.
+- **Step 11 — Kernel specialization** (`kernel_spec/`): no dedicated citation.
+- **Step 12 — AOT compilation pipeline** (`aot/`): Lattner, C. & Adve, V. (2004), *"LLVM: A Compilation Framework for Lifelong Program Analysis & Transformation"* (CGO 2004) — LLVM codegen background for the pipeline's backend.
+- **Step 13 — Cost model** (`cost_model/`): no dedicated citation.
+- **Step 14 — libFuzzer integration** (`fuzzing/`): no dedicated citation; see libFuzzer docs under Vendor docs.
+- **Step 15 — LLVM upstream**: Lattner & Adve (2004), same as step 12.
 
 **Vendor docs:** MLIR language reference, TableGen ODS reference, LLVM IR
 reference manual.
@@ -217,50 +196,31 @@ reference manual.
 **Start here:** `networking/DESIGN.md`, `networking/README.md` (has the full
 per-step status table: 12 of 25 steps actually built+run on this Mac).
 
-| Directory | Topic | Locally run? |
-|---|---|---|
-| `common/` | Portable `Channel` transport (real POSIX sockets) | yes |
-| `rdma_v1/`, `efa_srd/` | RDMA/EFA (TCP baseline runs; real EFA gated) | partial |
-| `ptp/` | PTP clock sync | gated |
-| `grpc_control/`, `flatbuffers_data/` | gRPC control plane, FlatBuffers data plane | gated |
-| `af_xdp/`, `userspace_net/` | AF_XDP / userspace networking | gated (Linux) |
-| `nic_deep_dive/` | NIC architecture writeup | gated |
-| `ring_allreduce/`, `halving_doubling/`, `tree_allreduce/` | All-reduce algorithms | yes |
-| `collectives/` | Broadcast/reduce-scatter/all-gather library | yes |
-| `nccl_tuning/` | NCCL tuning config | gated |
-| `topo_scheduler/` | Topology-aware scheduler | yes |
-| `vector_clocks/` | Lamport clocks + vector clocks | yes |
-| `chandy_lamport/` | Distributed snapshots | yes |
-| `raft/` | Raft consensus (leader election + log replication) | yes |
-| `tla_raft/`, `tla_collective/` | TLA+ specs for Raft and the collective protocol | gated (needs Java/TLC) |
-| `backpressure/`, `hedged_requests/`, `multitenancy/` | Backpressure, hedged requests, multi-tenancy | yes |
-| `chaos/` | Chaos engineering harness | partial |
-
-**Primary sources:**
-- Lamport, L. (1978), *"Time, Clocks, and the Ordering of Events in a
-  Distributed System"* — Lamport clocks, `networking/vector_clocks/`.
-- Fidge/Mattern (independently, 1988) — vector clocks proper (the extension
-  beyond Lamport's scalar clock that `VectorClock` implements).
-- Chandy, K.M. & Lamport, L. (1985), *"Distributed Snapshots: Determining
-  Global States of Distributed Systems"* — `networking/chandy_lamport/`
-  cites this directly ("the classic algorithm, Chandy & Lamport, 1985").
-- Ongaro, D. & Ousterhout, J. (2014), *"In Search of an Understandable
-  Consensus Algorithm"* (Raft paper) — `networking/raft/` implements this;
-  election timeout range (150–300ms) is taken directly from the paper.
-- Ongaro, D. (2014), *Consensus: Bridging Theory and Practice* (Stanford PhD
-  thesis) — `networking/tla_raft/README.md` cites the thesis appendix
-  directly as the source the community TLA+ Raft spec (and this repo's
-  scoped-down version) follows.
-- Lamport, L. (2002), *Specifying Systems* — the TLA+ book; needed to read
-  `tla_raft/Raft.tla` and `tla_collective/`.
-- Rabenseifner, R. (2004), *"Optimization of Collective Reduction
-  Operations"* — `networking/halving_doubling/README.md` names this
-  directly ("Rabenseifner's algorithm") for the recursive halving-doubling
-  all-reduce.
-- Patarasuk, P. & Yuan, X. (2009), *"Bandwidth Optimal All-reduce Algorithms
-  for Clusters of Workstations"* — background for the ring all-reduce's
-  bandwidth-optimality claim in `ring_allreduce/`.
-- IEEE 1588 (Precision Time Protocol) standard — `networking/ptp/`.
+- **Step 1 — EFA setup and validation** (`efa_setup/`): no dedicated citation; see libfabric/EFA guide under Vendor docs.
+- **Step 2 — libfabric RDMA transport (v1)** (`rdma_v1/`): no dedicated citation.
+- **Step 3 — One-sided RDMA operations** (`rdma_onesided/`): no dedicated citation.
+- **Step 4 — EFA SRD transport** (`efa_srd/`): no dedicated citation.
+- **Step 5 — PTP clock synchronization** (`ptp/`): IEEE 1588 (Precision Time Protocol) standard.
+- **Step 6 — gRPC + protobuf control plane** (`grpc_control/`): no dedicated citation; see gRPC C++ docs under Vendor docs.
+- **Step 7 — Flatbuffers data plane** (`flatbuffers_data/`): no dedicated citation; see FlatBuffers docs under Vendor docs.
+- **Step 8 — AF_XDP kernel bypass** (`af_xdp/`): no dedicated citation; see AF_XDP kernel docs under Vendor docs.
+- **Step 9 — Userspace networking stack** (`userspace_net/`): no dedicated citation.
+- **Step 10 — NIC hardware deep dive** (`nic_deep_dive/`): no dedicated citation.
+- **Step 11 — Ring all-reduce** (`ring_allreduce/`): Patarasuk, P. & Yuan, X. (2009), *"Bandwidth Optimal All-reduce Algorithms for Clusters of Workstations"* — background for the bandwidth-optimality claim.
+- **Step 12 — Recursive halving-doubling all-reduce** (`halving_doubling/`): Rabenseifner, R. (2004), *"Optimization of Collective Reduction Operations"* — `halving_doubling/README.md` names this directly ("Rabenseifner's algorithm").
+- **Step 13 — Tree all-reduce** (`tree_allreduce/`): no dedicated citation.
+- **Step 14 — Broadcast, reduce-scatter, all-gather** (`collectives/`): no dedicated citation.
+- **Step 15 — NCCL integration + tuning** (`nccl_tuning/`): no dedicated citation; see NCCL developer guide under Vendor docs.
+- **Step 16 — Topology-aware scheduler** (`topo_scheduler/`): no dedicated citation.
+- **Step 17 — Vector clocks** (`vector_clocks/`): Lamport, L. (1978), *"Time, Clocks, and the Ordering of Events in a Distributed System"* — the scalar `LamportClock`; Fidge/Mattern (independently, 1988) — the vector-clock extension `VectorClock` implements.
+- **Step 18 — Chandy-Lamport snapshots** (`chandy_lamport/`): Chandy, K.M. & Lamport, L. (1985), *"Distributed Snapshots: Determining Global States of Distributed Systems"* — cited directly ("the classic algorithm, Chandy & Lamport, 1985").
+- **Step 19 — Raft consensus** (`raft/`): Ongaro, D. & Ousterhout, J. (2014), *"In Search of an Understandable Consensus Algorithm"* — election timeout range (150-300ms) taken directly from the paper.
+- **Step 20 — TLA+ spec for Raft** (`tla_raft/`): Ongaro, D. (2014), *Consensus: Bridging Theory and Practice* (Stanford PhD thesis) — `tla_raft/README.md` cites the thesis appendix directly as the source the community TLA+ Raft spec follows; Lamport, L. (2002), *Specifying Systems* — the TLA+ book needed to read `Raft.tla`.
+- **Step 21 — Backpressure + load shedding** (`backpressure/`): no dedicated citation.
+- **Step 22 — Hedged requests** (`hedged_requests/`): no dedicated citation.
+- **Step 23 — Multi-tenancy** (`multitenancy/`): no dedicated citation.
+- **Step 24 — Chaos engineering harness** (`chaos/`): no dedicated citation.
+- **Step 25 — TLA+ for collective protocol** (`tla_collective/`): Lamport (2002), *Specifying Systems*, same as step 20.
 
 **Vendor docs:** libfabric/EFA programmer's guide, gRPC C++ docs,
 FlatBuffers schema/codegen docs, AF_XDP kernel documentation, NCCL
@@ -270,81 +230,43 @@ developer guide.
 
 ## Phase 6: Distributed GPU Training (+ `/transformer/`)
 
-**Start here:** `distributed_training/README.md`, plus `transformer/README.md`
-for the model every RLHF-stage step (22–25) trains.
+**Start here:** `distributed_training/README.md`, plus `transformer/README.md`.
 
-| Directory | Topic |
-|---|---|
-| `data_loading/`, `data_parallel/`, `grad_accum/`, `grad_clipping/` | Data pipeline, data parallelism, grad accumulation/clipping |
-| `autograd/` | Reverse-mode autograd engine + toy MLP (also what Phase 14 attacks) |
-| `zero1/`, `zero2/`, `zero3/`, `zero_infinity/` | ZeRO stages 1–3 + CPU/NVMe offload |
-| `col_row_linear/` | Column/row-parallel linear (Megatron-LM tensor parallelism) |
-| `tensor_parallel_attn/`, `seq_parallel/` | Tensor-parallel attention, sequence parallelism |
-| `pipeline_1f1b/` | GPipe vs. 1F1B pipeline scheduling |
-| `parallel_3d/` | 3D parallelism (data + tensor + pipeline) |
-| `moe/` | Mixture-of-Experts / expert parallelism |
-| `checkpoint/` | Sharded checkpointing |
-| `compute_comm_overlap/` | Compute/communication overlap |
-| `sync_batchnorm/` | SyncBatchNorm |
-| `full_training_loop/` | End-to-end training loop |
-| `sparsity_training/` | 2:4 structured sparsity training |
-| `sft/` | Supervised fine-tuning |
-| `reward_model/` | Reward model (Bradley-Terry) |
-| `ppo_rlhf/` | PPO-based RLHF |
-| `dpo/` | Direct Preference Optimization |
-| `training_worker/` | Real process-per-rank training driver (added for Phase 16) |
-| `gpudirect_storage/` | GPUDirect Storage (hardware-gated) |
+**The model itself:** Vaswani, A. et al. (2017), *"Attention Is All You
+Need"* — the architecture `transformer/transformer_model.h` and
+`tensor_parallel_attn/attention.h` implement; read this before any step
+below that trains or manipulates the model.
 
-**Primary sources:**
-- Vaswani, A. et al. (2017), *"Attention Is All You Need"* — the transformer
-  architecture `transformer/transformer_model.h` and
-  `tensor_parallel_attn/attention.h` implement.
-- Shoeybi, M. et al. (2019), *"Megatron-LM: Training Multi-Billion Parameter
-  Language Models Using Model Parallelism"* — `col_row_linear/` and
-  `tensor_parallel_attn/README.md` both cite Megatron-style tensor
-  parallelism directly as the pattern being validated.
-- Rajbhandari, S. et al. (2020), *"ZeRO: Memory Optimizations Toward
-  Training Trillion Parameter Models"* — `zero1/`/`zero2/`/`zero3/`.
-- Rajbhandari, S. et al. (2021), *"ZeRO-Infinity: Breaking the GPU Memory
-  Wall for Extreme Scale Deep Learning"* — `zero_infinity/`.
-- Huang, Y. et al. (2019), *"GPipe: Efficient Training of Giant Neural
-  Networks using Pipeline Parallelism"* — the GPipe baseline
-  `pipeline_1f1b/pipeline_schedule.h` compares 1F1B against directly.
-- Narayanan, D. et al. (2019 PipeDream / 2021 Megatron-LM pipelining paper)
-  — 1F1B scheduling; `pipeline_1f1b/pipeline_schedule.h` cites "see the
-  Megatron-LM paper" for the bubble-time equivalence result it validates.
-- Korthikanti, V. et al. (2022), *"Reducing Activation Recomputation in
-  Large Transformer Models"* — sequence parallelism background for
-  `seq_parallel/`.
-- Shazeer, N. et al. (2017), *"Outrageously Large Neural Networks: The
-  Sparsely-Gated Mixture-of-Experts Layer"* — `moe/`.
-- Fedus, W., Zoph, B. & Shazeer, N. (2021), *"Switch Transformers"* —
-  further MoE/expert-parallelism background for `moe/`.
-- Ioffe, S. (2017), *"Batch Renormalization"* / Ioffe & Szegedy (2015)
-  *"Batch Normalization"* — background for `sync_batchnorm/`'s
-  cross-device statistics synchronization.
-- Bradley, R.A. & Terry, M.E. (1952), *"Rank Analysis of Incomplete Block
-  Designs"* — the Bradley-Terry pairwise-preference model
-  `reward_model/reward_model.h` and `dpo/dpo.h` both build on directly.
-- Ouyang, L. et al. (2022), *"Training language models to follow
-  instructions with human feedback"* (InstructGPT/RLHF) — the
-  SFT→reward-model→PPO pipeline `sft/`→`reward_model/`→`ppo_rlhf/` mirrors.
-- Schulman, J. et al. (2017), *"Proximal Policy Optimization Algorithms"* —
-  `ppo_rlhf/ppo_rlhf.h`'s clipped surrogate objective and "k1" KL estimator
-  (cited directly as "Schulman's k1 estimator").
-- Christiano, P. et al. (2017), *"Deep Reinforcement Learning from Human
-  Preferences"* — the RLHF-from-preferences framing PPO/DPO both sit inside.
-- Stiennon, N. et al. (2020), *"Learning to Summarize from Human Feedback"*
-  — an early large-scale RLHF pipeline with the same reward-model+PPO shape.
-- Rafailov, R. et al. (2023), *"Direct Preference Optimization: Your
-  Language Model is Secretly a Reward Model"* — `dpo/dpo.h` and
-  `dpo/README.md` cite this directly; the whole step is built on their
-  closed-form-optimal-policy reparameterization.
+- **Step 1 — Distributed data loading** (`data_loading/`): no dedicated citation.
+- **Step 2 — GPUDirect Storage** (`gpudirect_storage/`): no dedicated citation.
+- **Step 3 — Data parallel training (baseline)** (`data_parallel/`): no dedicated citation.
+- **Step 4 — Gradient accumulation** (`grad_accum/`): no dedicated citation.
+- **Step 5 — Gradient clipping** (`grad_clipping/`): no dedicated citation.
+- **Step 6 — Autograd engine** (`autograd/`): no dedicated citation; standard backprop/optimizer material (SGD, Adam) is the assumed background.
+- **Step 7 — ZeRO-1** (`zero1/`): Rajbhandari, S. et al. (2020), *"ZeRO: Memory Optimizations Toward Training Trillion Parameter Models"*.
+- **Step 8 — ZeRO-2** (`zero2/`): Rajbhandari et al. (2020), same paper.
+- **Step 9 — ZeRO-3** (`zero3/`): Rajbhandari et al. (2020), same paper.
+- **Step 10 — ZeRO-Infinity** (`zero_infinity/`): Rajbhandari, S. et al. (2021), *"ZeRO-Infinity: Breaking the GPU Memory Wall for Extreme Scale Deep Learning"*.
+- **Step 11 — Column/row-parallel linear layers** (`col_row_linear/`): Shoeybi, M. et al. (2019), *"Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism"* — cited directly as the pattern being validated.
+- **Step 12 — Tensor-parallel attention** (`tensor_parallel_attn/`): Shoeybi et al. (2019), same paper; Vaswani et al. (2017) for the attention mechanism itself.
+- **Step 13 — Sequence parallelism** (`seq_parallel/`): Korthikanti, V. et al. (2022), *"Reducing Activation Recomputation in Large Transformer Models"*.
+- **Step 14 — 1F1B pipeline schedule** (`pipeline_1f1b/`): Huang, Y. et al. (2019), *"GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism"* — the baseline `pipeline_schedule.h` compares against directly; Narayanan, D. et al. (2019 PipeDream / 2021 Megatron-LM pipelining paper) — cited as "see the Megatron-LM paper" for the bubble-time equivalence result.
+- **Step 15 — 3D parallelism** (`parallel_3d/`): no separate citation — composition of steps 7-14's already-cited techniques.
+- **Step 16 — MoE / Expert parallelism** (`moe/`): Shazeer, N. et al. (2017), *"Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer"*; Fedus, W., Zoph, B. & Shazeer, N. (2021), *"Switch Transformers"*.
+- **Step 17 — Checkpoint sharding** (`checkpoint/`): no dedicated citation.
+- **Step 18 — Compute/communication overlap** (`compute_comm_overlap/`): no dedicated citation.
+- **Step 19 — Distributed batch normalization** (`sync_batchnorm/`): Ioffe, S. & Szegedy, C. (2015), *"Batch Normalization"*; Ioffe, S. (2017), *"Batch Renormalization"*.
+- **Step 20 — Full training loop** (`full_training_loop/`): no dedicated citation.
+- **Step 21 — 2:4 sparsity in training** (`sparsity_training/`): no separate citation — cross-references Phase 3 step 20's `cusparseLtMatmul` target.
+- **Step 22 — Supervised fine-tuning (SFT)** (`sft/`): Ouyang, L. et al. (2022), *"Training language models to follow instructions with human feedback"* (InstructGPT/RLHF) — the SFT→reward-model→PPO pipeline this step starts.
+- **Step 23 — Reward model training** (`reward_model/`): Bradley, R.A. & Terry, M.E. (1952), *"Rank Analysis of Incomplete Block Designs"* — the pairwise-preference model `reward_model.h` builds on directly.
+- **Step 24 — PPO-based RLHF** (`ppo_rlhf/`): Schulman, J. et al. (2017), *"Proximal Policy Optimization Algorithms"* — the clipped surrogate objective and "k1" KL estimator, cited directly; Christiano, P. et al. (2017), *"Deep Reinforcement Learning from Human Preferences"*; Stiennon, N. et al. (2020), *"Learning to Summarize from Human Feedback"*; Ouyang et al. (2022), same as step 22.
+- **Step 25 — DPO (Direct Preference Optimization)** (`dpo/`): Rafailov, R. et al. (2023), *"Direct Preference Optimization: Your Language Model is Secretly a Reward Model"* — cited directly; the step is built on their closed-form-optimal-policy reparameterization.
+- **Step 26 — io_uring-based async checkpoint I/O**: no dedicated citation; see `liburing`/io_uring docs under Vendor docs (Linux-only).
 
-**Background:** standard backprop/optimizer material (SGD, Adam) underlies
-`autograd/`; policy-gradient/REINFORCE (Sutton & Barto, *Reinforcement
-Learning: An Introduction*, ch. 13) is useful background before Schulman's
-PPO paper.
+**Background:** policy-gradient/REINFORCE (Sutton & Barto, *Reinforcement
+Learning: An Introduction*, ch. 13) is useful background before step 24's
+Schulman et al. PPO paper.
 
 ---
 
@@ -352,51 +274,37 @@ PPO paper.
 
 **Start here:** `fpga_engine/README.md` (per-step status table).
 
-| Directory | Topic |
-|---|---|
-| `f1_setup/`, `tcl_pipeline/`, `power_ci/` | AWS F1 validation, TCL synth/impl/bitstream, Vivado power CI |
-| `axi_stream/` | AXI4-Stream passthrough |
-| `dot_product/`, `loop_opt/` | Dot-product II study, UNROLL/PIPELINE/DATAFLOW |
-| `dsp_lut/`, `fixed_point/` | DSP48E2 vs LUT, `ap_fixed` precision/resource/latency |
-| `bram_uram/`, `ddr4/` | BRAM vs URAM access patterns, multi-bank DDR4 |
-| `dma/`, `pcie_latency/`, `pingpong/` | Host DMA via XRT, PCIe latency decomposition, double-buffered overlap |
-| `ml_kernel/` | Fully pipelined INT8 MLP inference kernel |
-| `timing_closure/`, `slr/`, `clock_gating/` | Critical-path/retiming, SLR partitioning, clock-gating power model |
-| `xadc/` | Die temperature/voltage monitoring (real XRT sensor API) |
-| `ila_debug/` | ILA debug core + AXI handshake checker |
-| `cocotb/` | Verilog testbenches, **actually run** (Icarus Verilog), caught a real DMA timing bug |
-| `symbiyosys/` | Formal verification (**actually run**, prebuilt OSS CAD Suite `yosys`/`sby`) |
-| `partial_reconfig/` | Dynamic Function eXchange (DFX) hot-swap |
-| `fpga_net/` | RDMA-like FPGA-direct network path (P4_16) |
-| `vitis_ai/` | DPU-vs-custom-kernel comparison |
-| `thermal_router/` | Thermal-aware routing |
+- **Step 1 — AWS F1 setup** (`f1_setup/`): no dedicated citation.
+- **Step 2 — TCL build pipeline** (`tcl_pipeline/`): no dedicated citation; see Vivado UG901/UG904 under Vendor docs.
+- **Step 3 — Vivado power report CI** (`power_ci/`): no dedicated citation.
+- **Step 4 — AXI4-Stream interface** (`axi_stream/`): no dedicated citation.
+- **Step 5 — First HLS kernel: vector dot product** (`dot_product/`): no dedicated citation; see Vitis HLS UG1399 under Vendor docs.
+- **Step 6 — Loop optimization deep dive** (`loop_opt/`): no dedicated citation; see Vitis HLS UG1399.
+- **Step 7 — DSP vs LUT tradeoff analysis** (`dsp_lut/`): no dedicated citation; see UltraScale+ architecture docs under Vendor docs. Background: any intro RTL/FPGA design text (e.g. Harris & Harris, *Digital Design and Computer Architecture*) covers the pipeline-register/critical-path vocabulary this step assumes.
+- **Step 8 — Fixed-point arithmetic** (`fixed_point/`): no dedicated citation; see Vitis HLS UG1399 (`ap_fixed`).
+- **Step 9 — BRAM vs URAM access patterns** (`bram_uram/`): no dedicated citation; see UltraScale+ architecture docs.
+- **Step 10 — DDR4 integration** (`ddr4/`): no dedicated citation.
+- **Step 11 — DMA orchestration** (`dma/`): no dedicated citation; see XRT Architecture and API under Vendor docs.
+- **Step 12 — PCIe latency decomposition** (`pcie_latency/`): no dedicated citation.
+- **Step 13 — Ping-pong double buffering** (`pingpong/`): no dedicated citation.
+- **Step 14 — ML inference kernel** (`ml_kernel/`): no dedicated citation.
+- **Step 15 — Timing closure** (`timing_closure/`): no dedicated citation; same Harris & Harris background as step 7.
+- **Step 16 — SLR partitioning** (`slr/`): no dedicated citation; see UltraScale+ architecture docs.
+- **Step 17 — Clock gating** (`clock_gating/`): no dedicated citation.
+- **Step 18 — XADC monitoring** (`xadc/`): no dedicated citation; see XRT Architecture and API (`get_info<thermal|electrical>()`).
+- **Step 19 — ILA debug session** (`ila_debug/`): no dedicated citation.
+- **Step 20 — Cocotb testbenches** (`cocotb/`): no dedicated citation; see cocotb documentation under Vendor docs.
+- **Step 21 — SymbiYosys formal verification** (`symbiyosys/`): no academic citation; see SymbiYosys/Yosys documentation under Vendor docs — the README documents a real gap (free `yosys` lacks full SVA `assert property` grammar, needs the commercial Verific plugin) that forced rewriting properties into procedural `assert`/`$past`/`$stable` form.
+- **Step 22 — Partial reconfiguration** (`partial_reconfig/`): no dedicated citation.
+- **Step 23 — FPGA network stack** (`fpga_net/`): no academic citation; see P4_16 Language Specification under Vendor docs.
+- **Step 24 — Vitis AI evaluation** (`vitis_ai/`): no academic citation; see Vitis AI User Guide under Vendor docs (DPU architecture, `vai_q_pytorch` quantization, `vai_c_xir` compilation).
+- **Step 25 — Thermal-aware router integration** (`thermal_router/`): no dedicated citation.
 
-**Primary sources:**
-- Xilinx/AMD, *Vivado Design Suite User Guide* (UG901/UG904 etc.) — TCL
-  synthesis/implementation flow.
-- Xilinx/AMD, *Vitis HLS User Guide* (UG1399) — pragmas (`PIPELINE`,
-  `UNROLL`, `DATAFLOW`), II, `ap_fixed`.
-- Xilinx/AMD, *UltraScale+ Architecture* documents (DSP48E2 slice, SLR
-  crossing, clocking).
-- Xilinx/AMD, *XRT (Xilinx Runtime) Architecture and API* — the real DMA/
-  sensor/`load_xclbin()` APIs `dma/`, `xadc/`, `partial_reconfig/` target.
-- P4 Language Consortium, *P4_16 Language Specification* — `fpga_net/
-  rdma_bypass.p4`.
-- SymbiYosys / Yosys documentation (YosysHQ) — formal flow used in
-  `symbiyosys/`; the README documents a real gap (free `yosys` lacks full
-  SVA `assert property` grammar — needs the commercial Verific plugin) that
-  forced rewriting properties into procedural `assert`/`$past`/`$stable`
-  form.
-- cocotb documentation — the Python-based testbench framework used in
-  `cocotb/`.
-- Xilinx/AMD, *Vitis AI User Guide* — DPU architecture, quantization flow
-  (`vai_q_pytorch`), compilation (`vai_c_xir`), used in `vitis_ai/`.
-
-**Background:** the DSP48E2-vs-LUT tradeoff (`dsp_lut/`) and timing-closure
-retiming (`timing_closure/`) assume basic digital-design vocabulary
-(pipeline registers, critical path, setup/hold) — any intro RTL/FPGA design
-text (e.g. Harris & Harris, *Digital Design and Computer Architecture*)
-covers this.
+**Vendor docs:** Xilinx/AMD *Vivado Design Suite User Guide* (UG901/UG904),
+*Vitis HLS User Guide* (UG1399), *UltraScale+ Architecture* documents, *XRT
+Architecture and API*, *Vitis AI User Guide*; P4 Language Consortium,
+*P4_16 Language Specification*; SymbiYosys/Yosys documentation; cocotb
+documentation.
 
 ---
 
@@ -404,35 +312,19 @@ covers this.
 
 **Start here:** `tpu_engine/README.md` (per-step status table).
 
-| Directory | Topic |
-|---|---|
-| `gcp_setup/`, `tpu_benchmarks/` | GCP TPU VM provisioning + JAX correctness validation, MXU/HBM/ICI benchmarks |
-| `stablehlo_lower/` | MLIR `runtime` dialect → StableHLO lowering pass |
-| `stablehlo_execute/` | StableHLO execution via `jax.export`, validated vs. numpy |
-| `pjit_distributed/` | pjit-sharded MLP scaling |
-| `ici_collectives/` | Gradient all-reduce over ICI |
-| `mxu_opt/` | 128-boundary MXU utilization-cliff sweep |
-| `vliw_analysis/` | HLO dump + VLIW-vs-OOO-vs-SIMT written analysis |
-| `tpu_profiler/` | Combined MXU/HBM/ICI profiler capture |
-| `sparsecore/` | SparseCore-vs-dense-gather embedding comparison (v5-only) |
-| `layout_opt/`, `hbm_sram/`, `cost_model/` | MXU tile-padding model, HBM↔VMEM overlap model, $/FLOP comparison — **all three actually run locally** (plain `clang++`, no JAX) |
-
-**Primary sources:**
-- Jouppi, N. et al. (2017/2023), *"In-Datacenter Performance Analysis of a
-  Tensor Processing Unit"* and the TPU v4 follow-up paper — the systolic-
-  array MXU architecture `mxu_opt/`, `layout_opt/`, and `vliw_analysis/`
-  are all reasoning about.
-- Google, *XLA: Optimizing Compiler for Machine Learning* documentation —
-  the compilation path StableHLO sits in front of.
-- StableHLO project (OpenXLA), *StableHLO specification* — the target
-  dialect for `stablehlo_lower/StableHLOLowerPass.cpp`.
-- Google/JAX docs — `pjit`, `jax.export`, sharding annotations, used in
-  `pjit_distributed/`, `stablehlo_execute/`.
-
-**Background:** the VLIW-vs-out-of-order-superscalar-vs-SIMT comparison in
-`vliw_analysis/` assumes the same computer-architecture background as Phase
-2/3 (instruction scheduling, hazard hiding); no additional paper needed
-beyond the Jouppi TPU papers above.
+- **Step 1 — GCP + TPU setup** (`gcp_setup/`): no dedicated citation.
+- **Step 2 — TPU hardware deep dive** (`tpu_benchmarks/`): Jouppi, N. et al. (2017/2023), *"In-Datacenter Performance Analysis of a Tensor Processing Unit"* and the TPU v4 follow-up paper.
+- **Step 3 — MLIR → StableHLO lowering** (`stablehlo_lower/`): StableHLO project (OpenXLA), *StableHLO specification* — the target dialect for `StableHLOLowerPass.cpp`.
+- **Step 4 — StableHLO → XLA execution** (`stablehlo_execute/`): Google, *XLA: Optimizing Compiler for Machine Learning* documentation; Google/JAX docs (`jax.export`).
+- **Step 5 — TPU memory layout optimization** (`layout_opt/`): Jouppi et al. (2017/2023), same as step 2 — the systolic-array MXU architecture this step's tile-padding model reasons about.
+- **Step 6 — Explicit HBM ↔ SRAM scheduling** (`hbm_sram/`): Jouppi et al. (2017/2023), same as step 2.
+- **Step 7 — pjit for distributed TPU** (`pjit_distributed/`): Google/JAX docs (`pjit`, sharding annotations).
+- **Step 8 — Multi-TPU collectives via ICI** (`ici_collectives/`): no dedicated citation.
+- **Step 9 — MXU utilization optimization** (`mxu_opt/`): Jouppi et al. (2017/2023), same as step 2.
+- **Step 10 — VLIW ISA analysis** (`vliw_analysis/`): Jouppi et al. (2017/2023); assumes the same computer-architecture background as Phase 2/3 (instruction scheduling, hazard hiding) for the VLIW-vs-OOO-vs-SIMT comparison — no additional paper needed.
+- **Step 11 — TPU Profiler integration** (`tpu_profiler/`): no dedicated citation.
+- **Step 12 — TPU vs GPU cost model** (`cost_model/`): no dedicated citation.
+- **Step 13 — SparseCore (TPU v5)** (`sparsecore/`): no dedicated citation.
 
 ---
 
@@ -441,33 +333,15 @@ beyond the Jouppi TPU papers above.
 **Start here:** `inference_serving/README.md` (per-step status table; most
 steps actually run locally).
 
-| Directory | Topic | Locally run? |
-|---|---|---|
-| `paged_kv/` | Block allocator + per-sequence block table (PagedAttention-style) | yes |
-| `continuous_batching/` | Continuous batching vs. static batching | yes |
-| `sla_scheduler/` | EDF scheduling with preemption | yes |
-| `flash_decoding/` | Split-K decode-step attention (CUDA) | gated |
-| `speculative_decoding/` | Draft+verify speculative decoding | yes |
-| `gptq/` | Hessian-guided greedy column quantization | yes |
-| `kv_quant/` | INT8 K/V cache quantization | yes |
-| `serving_backend/` | `ServingRouter` multi-backend dispatch | yes |
-| `serving_bench/` | TTFT/TPOT/throughput benchmarking | partial |
-
-**Primary sources:**
-- Kwon, W. et al. (2023), *"Efficient Memory Management for Large Language
-  Model Serving with PagedAttention"* (vLLM paper) — the block-table KV
-  cache design `paged_kv/` implements and the continuous-batching throughput
-  finding `continuous_batching/` reproduces as a real measurement.
-- Frantar, E. et al. (2022), *"GPTQ: Accurate Post-Training Quantization for
-  Generative Pre-trained Transformers"* — `inference_serving/gptq/` and
-  `npu_engine/quant_export/` both cite this directly (Hessian inversion +
-  error compensation onto not-yet-quantized columns).
-- Leviathan, Y., Kalman, M. & Matias, Y. (2023), *"Fast Inference from
-  Transformers via Speculative Decoding"* (and the contemporaneous
-  Chen et al. 2023 DeepMind paper) — `speculative_decoding/`'s draft-then-
-  verify algorithm and its exactness-vs-plain-greedy-decoding guarantee.
-- Dao, T. et al. (2023), *"Flash-Decoding for long-context inference"* —
-  the split-K-over-KV-dimension idea `flash_decoding/` targets.
+- **Step 1 — Paged KV cache** (`paged_kv/`): Kwon, W. et al. (2023), *"Efficient Memory Management for Large Language Model Serving with PagedAttention"* (vLLM paper) — the block-table design implemented directly.
+- **Step 2 — Continuous batching** (`continuous_batching/`): Kwon et al. (2023), same paper — the continuous-batching throughput finding reproduced as a real measurement.
+- **Step 3 — SLA-aware scheduler** (`sla_scheduler/`): no dedicated citation.
+- **Step 4 — FlashDecoding** (`flash_decoding/`): Dao, T. et al. (2023), *"Flash-Decoding for long-context inference"* — the split-K-over-KV-dimension idea this step targets.
+- **Step 5 — Speculative decoding** (`speculative_decoding/`): Leviathan, Y., Kalman, M. & Matias, Y. (2023), *"Fast Inference from Transformers via Speculative Decoding"* (and the contemporaneous Chen et al. 2023 DeepMind paper).
+- **Step 6 — GPTQ INT4 quantization** (`gptq/`): Frantar, E. et al. (2022), *"GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers"* — cited directly (Hessian inversion + error compensation onto not-yet-quantized columns).
+- **Step 7 — KV cache quantization** (`kv_quant/`): no dedicated citation.
+- **Step 8 — Backend-agnostic serving** (`serving_backend/`): no dedicated citation.
+- **Step 9 — Serving benchmarks** (`serving_bench/`): no dedicated citation.
 
 ---
 
@@ -475,30 +349,21 @@ steps actually run locally).
 
 **Start here:** `observability/README.md`.
 
-| Directory | Topic | Locally run? |
-|---|---|---|
-| `ebpf/` | BCC tracepoint/kprobe program | gated (Linux/BCC/sudo) |
-| `opentelemetry/` | Hand-rolled span lifecycle + OTLP-JSON export | yes |
-| `dashboard/` | Ingestion/histogram/report pipeline | yes |
-| `tlc/` | TLC model-checking configs for the Raft/Collective TLA+ specs | gated (Java) |
-| `symbiyosys_ci/` | Re-runs Phase 7's formal proofs with change detection | yes |
-| `chaos/` | Raft leader-kill + FPGA thermal chaos scenarios | partial |
-| `kernel_variant_agent/`, `nsight_agent/`, `llm_autotune/` | Claude-API-driven agent steps (real SDK client code, no API calls made) | portable half only |
-
-**Primary sources:**
-- Sigelman, B. et al. (2010), *"Dapper, a Large-Scale Distributed Systems
-  Tracing Infrastructure"* — the distributed-tracing model
-  `opentelemetry/`'s span/parent-child linkage follows.
-- OpenTelemetry project, *OTLP specification* — the exact JSON export format
-  `opentelemetry/` parses back and validates against.
-- Gregg, B., *BPF Performance Tools* — the standard reference for
-  tracepoints/kprobes used in `ebpf/sched_probe.py`.
-- Lamport, L. (2002), *Specifying Systems* (again) — TLC model-checking
-  usage for `tlc/`.
+- **Step 1 — eBPF probes** (`ebpf/`): Gregg, B., *BPF Performance Tools* — the standard reference for tracepoints/kprobes used in `sched_probe.py`.
+- **Step 2 — OpenTelemetry integration** (`opentelemetry/`): Sigelman, B. et al. (2010), *"Dapper, a Large-Scale Distributed Systems Tracing Infrastructure"* — the span/parent-child model followed; OpenTelemetry project, *OTLP specification* — the exact JSON export format parsed back and validated against.
+- **Step 3 — Unified observability dashboard** (`dashboard/`): no dedicated citation.
+- **Step 4 — TLC model checking** (`tlc/`): Lamport, L. (2002), *Specifying Systems* — TLC usage, same book as Phase 5 steps 20/25.
+- **Step 5 — SymbiYosys CI integration** (`symbiyosys_ci/`): no dedicated citation — re-runs Phase 7 step 21's proofs.
+- **Step 6 — Chaos test suite** (`chaos/`): no dedicated citation.
+- **Step 7 — Nsight profile analyzer agent** (`nsight_agent/`): no academic citation; see Anthropic API reference under Vendor docs.
+- **Step 8 — Kernel variant generator agent** (`kernel_variant_agent/`): no academic citation; see Anthropic API reference.
+- **Step 9 — LLM autotuning agent** (`llm_autotune/`): no academic citation; see Anthropic API reference.
+- **Step 10 — Tool use for the existing agents** (added 2026-07-28): no academic citation; see Anthropic API reference (Messages API tool-use mechanism).
+- **Step 11 — Skill registry + composable dispatch** (added 2026-07-28): no dedicated citation.
 
 **Vendor docs:** Anthropic API reference (Messages API, structured
-outputs/`output_config.format`) — the client code in the three agent steps
-targets this directly.
+outputs/`output_config.format`) — the client code in steps 7-11 targets
+this directly.
 
 ---
 
@@ -506,32 +371,38 @@ targets this directly.
 
 **Start here:** `ml/README.md`.
 
-### Phase 12a: Classical ML
-| Directory | Primary source |
-|---|---|
-| `decision_tree/` | Breiman, L. et al. (1984), *Classification and Regression Trees* (CART) |
-| `random_forest/` | Breiman, L. (2001), *"Random Forests"* |
-| `gradient_boosting/` | Friedman, J. (2001), *"Greedy Function Approximation: A Gradient Boosting Machine"*; Friedman, J. (2002), *"Stochastic Gradient Boosting"* (row subsampling) |
-| `svm/` | Platt, J. (1998), *"Sequential Minimal Optimization: A Fast Algorithm for Training Support Vector Machines"* |
-| `knn/` | Bentley, J.L. (1975), *"Multidimensional Binary Search Trees"* (kd-tree, branch-and-bound); Omohundro, S. (1989), *"Five Balltree Construction Algorithms"*; Uhlmann, J. (1991) (ball trees, independently); Liu, T. et al. (2004) (defeatist-search approximate ball-tree ANN) |
-| `kmeans/` | Arthur, D. & Vassilvitskii, S. (2007), *"k-means++: The Advantages of Careful Seeding"* |
-| `pca/` | Halko, N., Martinsson, P.G. & Tropp, J. (2011), *"Finding Structure with Randomness"* (randomized SVD) |
-| `linear_models/` | Zou, H. & Hastie, T. (2005), *"Regularization and Variable Selection via the Elastic Net"*; Nocedal, J. & Wright, S., *Numerical Optimization*, Algorithm 7.4/7.5 (L-BFGS two-loop recursion) |
+### Phase 12a: Classical ML (steps 1-8)
+- **Step 1 — Decision tree (CART)** (`decision_tree/`): Breiman, L. et al. (1984), *Classification and Regression Trees*.
+- **Step 2 — Random Forest** (`random_forest/`): Breiman, L. (2001), *"Random Forests"*.
+- **Step 3 — Gradient Boosted Trees** (`gradient_boosting/`): Friedman, J. (2001), *"Greedy Function Approximation: A Gradient Boosting Machine"*; Friedman, J. (2002), *"Stochastic Gradient Boosting"* (row subsampling).
+- **Step 4 — SVM** (`svm/`): Platt, J. (1998), *"Sequential Minimal Optimization: A Fast Algorithm for Training Support Vector Machines"*.
+- **Step 5 — k-NN** (`knn/`): Bentley, J.L. (1975), *"Multidimensional Binary Search Trees"* (kd-tree, branch-and-bound); Omohundro, S. (1989), *"Five Balltree Construction Algorithms"*; Uhlmann, J. (1991) (ball trees, independently); Liu, T. et al. (2004) (defeatist-search approximate ball-tree ANN).
+- **Step 6 — k-means++** (`kmeans/`): Arthur, D. & Vassilvitskii, S. (2007), *"k-means++: The Advantages of Careful Seeding"*.
+- **Step 7 — PCA** (`pca/`): Halko, N., Martinsson, P.G. & Tropp, J. (2011), *"Finding Structure with Randomness"* (randomized SVD).
+- **Step 8 — Linear models** (`linear_models/`): Zou, H. & Hastie, T. (2005), *"Regularization and Variable Selection via the Elastic Net"*; Nocedal, J. & Wright, S., *Numerical Optimization*, Algorithm 7.4/7.5 (L-BFGS).
 
-### Phase 12b: Decision Framework + Benchmarks
-| Directory | Notes |
-|---|---|
-| `openml_bench/` | Live OpenML REST API, `study/99` = the actual OpenML-CC18 benchmark suite (Bischl, B. et al. (2019), *"OpenML Benchmarking Suites"*) |
-| `cross_method/`, `decision_criteria/`, `ensemble/`, `failure_modes/`, `hyperparam_sensitivity/` | Written analyses grounded in `openml_bench`'s real numbers; no additional external citation beyond the algorithms' own papers above |
+### Phase 12b: Decision Framework + Benchmarks (steps 9-14)
+- **Step 9 — OpenML CC-18 runner** (`openml_bench/`): Bischl, B. et al. (2019), *"OpenML Benchmarking Suites"* — `study/99` is the actual OpenML-CC18 study ID.
+- **Step 10 — Cross-method comparison** (`cross_method/`): no dedicated citation — grounded in step 9's real numbers.
+- **Step 11 — Decision criteria document** (`decision_criteria/`): no dedicated citation.
+- **Step 12 — Hyperparameter sensitivity analysis** (`hyperparam_sensitivity/`): no dedicated citation.
+- **Step 13 — Ensemble composition** (`ensemble/`): no dedicated citation.
+- **Step 14 — Failure mode catalog** (`failure_modes/`): no dedicated citation.
 
-### Phase 12c: Hyperparameter Optimization
-| Directory | Primary source |
-|---|---|
-| `bayesian_opt/` | Rasmussen, C.E. & Williams, C.K.I. (2006), *Gaussian Processes for Machine Learning*; Mockus, J. (1978), *"The Application of Bayesian Methods for Seeking the Extremum"* (Expected Improvement) |
-| `tpe/` | Bergstra, J. et al. (2011), *"Algorithms for Hyper-Parameter Optimization"* (Tree-structured Parzen Estimator) |
-| `hyperband/` | Jamieson, K. & Talwalkar, A. (2016), *"Non-stochastic Best Arm Identification and Hyperparameter Optimization"* (Successive Halving); Li, L. et al. (2016), *"Hyperband: A Novel Bandit-Based Approach to Hyperparameter Optimization"*; Li, L. et al. (2018), *"Massively Parallel Hyperparameter Tuning"* (ASHA) |
-| `pbt/` | Jaderberg, M. et al. (2017), *"Population Based Training of Neural Networks"* |
-| all four | Bergstra, J. & Bengio, Y. (2012), *"Random Search for Hyper-Parameter Optimization"* — the "random search is a strong baseline" finding all four steps independently reproduce on this repo's real OpenML tasks |
+### Phase 12c: Hyperparameter Optimization (steps 15-18)
+- **Step 15 — Bayesian optimization** (`bayesian_opt/`): Rasmussen, C.E. & Williams, C.K.I. (2006), *Gaussian Processes for Machine Learning*; Mockus, J. (1978), *"The Application of Bayesian Methods for Seeking the Extremum"* (Expected Improvement).
+- **Step 16 — TPE** (`tpe/`): Bergstra, J. et al. (2011), *"Algorithms for Hyper-Parameter Optimization"* (Tree-structured Parzen Estimator).
+- **Step 17 — Hyperband / ASHA** (`hyperband/`): Jamieson, K. & Talwalkar, A. (2016), *"Non-stochastic Best Arm Identification and Hyperparameter Optimization"* (Successive Halving); Li, L. et al. (2016), *"Hyperband"*; Li, L. et al. (2018), *"Massively Parallel Hyperparameter Tuning"* (ASHA).
+- **Step 18 — Population-based training** (`pbt/`): Jaderberg, M. et al. (2017), *"Population Based Training of Neural Networks"*.
+
+**Background (steps 15-18 collectively):** Bergstra, J. & Bengio, Y.
+(2012), *"Random Search for Hyper-Parameter Optimization"* — the
+"random search is a strong baseline" finding all four steps independently
+reproduce on this repo's real OpenML tasks.
+
+**Phase-level background:** read Breiman (2001), Friedman (2001), and Platt
+(1998) alongside their implementations (steps 2, 3, 4) — this phase
+demonstrates ML systems depth, not a substitute for the papers themselves.
 
 ---
 
@@ -539,31 +410,15 @@ targets this directly.
 
 **Start here:** `rag/DESIGN.md`.
 
-| Directory | Topic |
-|---|---|
-| `embedding_model/` | Bidirectional encoder, InfoNCE/CLIP-style contrastive loss |
-| `hnsw/` (also `ml/knn/`'s `CosineBallTree`) | HNSW vs. ball-tree ANN benchmark |
-| `indexing_pipeline/` | Sentence-boundary-aware chunking + embed + index |
-| `rag_generation/` | Prompt construction + generation |
-| `recall_eval/` | recall@k measurement, exact vs. approximate |
-| `generation_quality/` | Retrieval-conditioned generation accuracy |
-| `approx_retrieval_study/` | Composes recall drop → generation-accuracy cost |
-| `serving_integration/` | `route_rag()` — non-invasive `ServingRouter` integration |
-
-**Primary sources:**
-- Malkov, Y. & Yashunin, D. (2016/2018), *"Efficient and Robust Approximate
-  Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs"*
-  — `rag/hnsw/hnsw.h` implements this directly (Algorithm 2, SEARCH-LAYER,
-  cited by name).
-- van den Oord, A., Li, Y. & Vinyals, O. (2018), *"Representation Learning
-  with Contrastive Predictive Coding"* — the InfoNCE loss
-  `embedding_model/embedding_model.h` cites directly.
-- Radford, A. et al. (2021), *"Learning Transferable Visual Models From
-  Natural Language Supervision"* (CLIP) — the symmetric query↔document
-  contrastive formulation `embedding_model.h` also cites directly.
-- Lewis, P. et al. (2020), *"Retrieval-Augmented Generation for
-  Knowledge-Intensive NLP Tasks"* — the RAG paradigm the whole phase
-  implements (retrieve-then-generate), background for `rag_generation/`.
+- **Step 1 — Embedding model** (`embedding_model/`): van den Oord, A., Li, Y. & Vinyals, O. (2018), *"Representation Learning with Contrastive Predictive Coding"* — the InfoNCE loss cited directly; Radford, A. et al. (2021), *"Learning Transferable Visual Models From Natural Language Supervision"* (CLIP) — the symmetric query↔document contrastive formulation, also cited directly.
+- **Step 2 — Cosine-similarity ANN retrieval** (`ml/knn`'s `CosineBallTree`): no dedicated citation — extends the existing `BallTree`.
+- **Step 3 — HNSW index** (`hnsw/`): Malkov, Y. & Yashunin, D. (2016/2018), *"Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs"* — implements Algorithm 2 (SEARCH-LAYER) directly, cited by name.
+- **Step 4 — Chunking + indexing pipeline** (`indexing_pipeline/`): no dedicated citation.
+- **Step 5 — Retrieval-augmented prompt construction** (`rag_generation/`): Lewis, P. et al. (2020), *"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"* — the retrieve-then-generate paradigm this step implements.
+- **Step 6 — Recall@k measurement** (`recall_eval/`): no dedicated citation.
+- **Step 7 — Generation quality with vs. without retrieval** (`generation_quality/`): no dedicated citation.
+- **Step 8 — Approximate vs. exact retrieval, system-level** (`approx_retrieval_study/`): no dedicated citation.
+- **Step 9 — Serving integration** (`serving_integration/`): no dedicated citation.
 
 ---
 
@@ -571,25 +426,14 @@ targets this directly.
 
 **Start here:** `adversarial/DESIGN.md`.
 
-| Directory | Primary source |
-|---|---|
-| `input_gradients/` | Foundational — no new paper, verifies the existing autograd tape's `x.grad()` via finite differences |
-| `fgsm/` | Goodfellow, I., Shlens, J. & Szegedy, C. (2014), *"Explaining and Harnessing Adversarial Examples"* |
-| `pgd/` | Madry, A. et al. (2017), *"Towards Deep Learning Models Resistant to Adversarial Attacks"* |
-| `vulnerability_measurement/` | Composes FGSM/PGD against the undefended model |
-| `adversarial_training/` | Madry et al. (2017) again — the min-max training formulation |
-| `robustness_tradeoff/` | Tsipras, D. et al. (2018), *"Robustness May Be at Odds with Accuracy"* |
-| `transferability/` | Szegedy, C. et al. (2013), *"Intriguing Properties of Neural Networks"*; Papernot, N. et al. (2016), *"Transferability in Machine Learning: from Phenomena to Black-Box Attacks using Adversarial Samples"* |
-| `randomized_smoothing/` | Cohen, J., Rosenfeld, E. & Kolter, Z. (2019), *"Certified Adversarial Robustness via Randomized Smoothing"* |
-
-Note: `randomized_smoothing/randomized_smoothing.h` documents one disclosed
-simplification vs. the paper — a normal/Wald confidence bound in place of
-Cohen et al.'s exact Clopper-Pearson bound.
-
-**Background:** Clopper, C.J. & Pearson, E.S. (1934), *"The Use of
-Confidence or Fiducial Limits Illustrated in the Case of the Binomial"* — the
-exact bound Cohen et al. use and this repo's Wald approximation stands in
-for.
+- **Step 1 — Input gradients** (`input_gradients/`): no dedicated citation — foundational; verifies the existing autograd tape's `x.grad()` via finite differences.
+- **Step 2 — FGSM** (`fgsm/`): Goodfellow, I., Shlens, J. & Szegedy, C. (2014), *"Explaining and Harnessing Adversarial Examples"*.
+- **Step 3 — PGD** (`pgd/`): Madry, A. et al. (2017), *"Towards Deep Learning Models Resistant to Adversarial Attacks"*.
+- **Step 4 — Undefended vulnerability measurement** (`vulnerability_measurement/`): no separate citation — composes steps 2-3 against the undefended model.
+- **Step 5 — Adversarial training** (`adversarial_training/`): Madry et al. (2017), same paper — the min-max training formulation.
+- **Step 6 — Robustness/accuracy tradeoff** (`robustness_tradeoff/`): Tsipras, D. et al. (2018), *"Robustness May Be at Odds with Accuracy"*.
+- **Step 7 — Transferability study** (`transferability/`): Szegedy, C. et al. (2013), *"Intriguing Properties of Neural Networks"*; Papernot, N. et al. (2016), *"Transferability in Machine Learning: from Phenomena to Black-Box Attacks using Adversarial Samples"*.
+- **Step 8 — Randomized smoothing** (`randomized_smoothing/`): Cohen, J., Rosenfeld, E. & Kolter, Z. (2019), *"Certified Adversarial Robustness via Randomized Smoothing"*. Background: Clopper, C.J. & Pearson, E.S. (1934), *"The Use of Confidence or Fiducial Limits Illustrated in the Case of the Binomial"* — the exact bound Cohen et al. use, which `randomized_smoothing.h` documents substituting with a normal/Wald approximation (a disclosed simplification).
 
 ---
 
@@ -597,18 +441,17 @@ for.
 
 **Start here:** `npu_engine/DESIGN.md`.
 
-| Directory | Topic |
-|---|---|
-| `quant_export/` | Reuses `inference_serving::GptqQuantizer` (Frantar et al. 2022, see Phase 9) at INT8, custom `.npuw` format |
-| `cost_model/` | Portable INT8 latency/efficiency model (NPU vs. GPU) |
-| `op_coverage/` | Walks all 18 `runtime` dialect ops, finds gather/scatter unsupported |
-| `thermal/` | Mirrors `fpga_engine/thermal_router`'s decision/hardware-read split |
+- **Step 1 — Toolchain validation**: no dedicated citation; see Apple Core ML / ONNX Runtime NPU execution providers docs under Vendor docs.
+- **Step 2 — Quantization export pipeline** (`quant_export/`): Frantar, E. et al. (2022) — same GPTQ paper as Phase 9 step 6, reused unchanged at `bits=8`.
+- **Step 3 — NPU vs. CPU vs. GPU cost-comparison model** (`cost_model/`): no dedicated citation.
+- **Step 4 — Operator coverage analysis** (`op_coverage/`): no dedicated citation.
+- **Step 5 — Power/thermal modeling** (`thermal/`): no dedicated citation — mirrors Phase 7 step 25's thermal-router split.
+- **Step 6 — Cost model + placement pass integration**: no dedicated citation — edits Phase 4 steps 9 and 13.
+- **Step 7 — ServingRouter integration**: no dedicated citation — edits Phase 9 step 8.
 
-**Vendor docs:** Apple *Core ML* documentation (ANE targeting), ONNX Runtime
-*NPU execution providers* documentation — both referenced as the
-still-unrun `npu_onnx_export.py` path (no `coremltools`/`onnx`/
-`onnxruntime` installed locally; see project memory on the standing
-no-new-local-installs decision).
+**Vendor docs:** Apple *Core ML* documentation (ANE targeting), ONNX
+Runtime *NPU execution providers* documentation — both referenced as the
+still-unrun `npu_onnx_export.py` path.
 
 ---
 
@@ -616,17 +459,13 @@ no-new-local-installs decision).
 
 **Start here:** `containers/DESIGN.md`, `containers/README.md`.
 
-| Artifact | Topic |
-|---|---|
-| `Dockerfile` | Multi-stage build, portable subset |
-| `docker/gpu/` | GPU passthrough (`daemon.json`, `Dockerfile.cuda`, compose) |
-| `k8s/serving/` | Latency-driven HPA (not raw CPU%) for `serving_daemon` |
-| `k8s/training/` | `StatefulSet` with `podManagementPolicy: Parallel` for gang-scheduled training, targets `distributed_training/training_worker/` |
-
-**Vendor docs:** Docker docs (multi-stage builds, `nvidia-container-toolkit`
-/ NVIDIA Container Runtime docs for `docker/gpu/`), Kubernetes docs
-(`HorizontalPodAutoscaler` custom-metrics API, `StatefulSet` semantics
-including `podManagementPolicy`).
+- **Step 1 — Dockerfile for the portable build** (`Dockerfile`): no dedicated citation; see Docker docs under Vendor docs.
+- **Step 2 — cgroup interaction with host-level tuning, measured**: no dedicated citation.
+- **Step 3 — GPU passthrough config** (`docker/gpu/`): no dedicated citation; see NVIDIA Container Toolkit docs under Vendor docs.
+- **Step 4 — Kubernetes manifests for inference serving** (`k8s/serving/`): no dedicated citation; see Kubernetes docs (HPA custom-metrics API) under Vendor docs.
+- **Step 5 — Gang-scheduled manifests for distributed training** (`k8s/training/`): no dedicated citation; see Kubernetes docs (`StatefulSet`/`podManagementPolicy`) under Vendor docs.
+- **Step 6 — Device plugin gap analysis for FPGA/TPU**: no dedicated citation.
+- **Step 7 — Custom schedulers vs. Kubernetes, compared directly**: no dedicated citation — cross-references Phase 5 steps 16 and 23 (`topo_scheduler`, `multitenancy`).
 
 ---
 
@@ -636,53 +475,20 @@ including `podManagementPolicy`).
 lands. Until then, PLAN.md's Phase 17 section is the closest thing to a
 "start here."
 
-| Planned step | Topic |
-|---|---|
-| 1 | RRAM-like device non-ideality model (read/write noise, drift, endurance) |
-| 2 | Resistive crossbar analog MAC simulation |
-| 3 | Non-volatile memory tradeoff comparison (RRAM/PCM/STT-MRAM/SRAM-CIM) |
-| 4 | Analog-vs-digital MAC energy model |
-| 5 | From-scratch PPA/dataflow model (WS/OS/IS/RS) |
-| 6 | Systolic array design-space sweep |
-| 7 | Hardware-algorithm co-design case study |
-| 8 | Analog circuit transient (RC step-response) surrogate |
-
-**Primary sources:**
-- Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network
-  Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical
-  resistive-crossbar-as-MAC-engine architecture step 2 simulates.
-- Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture
-  for Neural Network Computation in ReRAM-Based Main Memory"* — a second
-  foundational crossbar-PIM architecture, useful contrast to ISAAC's design
-  choices.
-- Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile
-  Memory"* (Proceedings of the IEEE) — the device-physics review step 1's
-  noise/drift/endurance model and step 3's NVM comparison table draw on.
-- Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing
-  of Deep Neural Networks: A Tutorial and Survey"* — the canonical
-  reference for the Weight-/Output-/Input-/Row-Stationary dataflow
-  taxonomy step 5 implements.
-- Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial
-  Architecture for Energy-Efficient Dataflow for Convolutional Neural
-  Networks"* — the concrete Row-Stationary accelerator design step 5/6
-  are modeled after.
-- Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN
-  Accelerator Evaluation"* — the tool step 5 reproduces a minimal version
-  of (workload + architecture description → utilization/data-movement/
-  energy), without depending on installing it.
-- Wu, Y.N., Emer, J. & Sze, V. (2019), *"Accelergy: An Architecture-Level
-  Energy Estimation Methodology for Accelerator Designs"* — the companion
-  energy-estimation methodology step 4/5 mirror the shape of.
-- Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated
-  neural-network training using analog memory"* (Nature) — a real
-  measured analog-training result, useful ground-truth calibration for
-  step 2's accuracy-vs-noise curve.
+- **Step 1 — Device non-ideality model**: Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile Memory"* (Proceedings of the IEEE) — the device-physics review this step's noise/drift/endurance model draws on.
+- **Step 2 — Resistive crossbar MAC simulation**: Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical resistive-crossbar-as-MAC-engine architecture this step simulates; Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main Memory"* — a second foundational crossbar-PIM architecture, useful contrast; Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated neural-network training using analog memory"* (Nature) — a real measured analog-training result, useful ground-truth calibration for the accuracy-vs-noise curve.
+- **Step 3 — Non-volatile memory tradeoff comparison**: Yu (2018), same as step 1.
+- **Step 4 — Energy model: analog MAC vs. digital MAC**: Wu, Y.N., Emer, J. & Sze, V. (2019), *"Accelergy: An Architecture-Level Energy Estimation Methodology for Accelerator Designs"* — the energy-estimation methodology this step's shape mirrors.
+- **Step 5 — PPA/dataflow modeling**: Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing of Deep Neural Networks: A Tutorial and Survey"* — the canonical reference for the Weight-/Output-/Input-/Row-Stationary taxonomy this step implements; Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN Accelerator Evaluation"* — the tool this step reproduces a minimal version of; Wu, Emer & Sze (2019), same as step 4.
+- **Step 6 — Systolic array design-space sweep**: Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks"* — the concrete Row-Stationary accelerator design this step and step 5 are modeled after; Sze et al. (2017), same as step 5.
+- **Step 7 — Hardware-algorithm co-design case study**: no new citation — re-derives an existing repo algorithm (Phase 6 step 21's `sparsity_training` or Phase 9 step 6's `gptq`) under analog constraints.
+- **Step 8 — Analog circuit transient surrogate**: no dedicated citation — basic circuit theory (Ohm's law, Kirchhoff's current law) is the entire mathematical content needed; see the Background note below.
 
 **Background:** basic circuit theory (Ohm's law, Kirchhoff's current law)
 is the entire mathematical content behind "a resistive crossbar computes a
-matrix-vector product for free" — no deeper circuit-design text is needed
-before step 2; Sze et al. 2017 above is also the right on-ramp for anyone
-who hasn't seen the dataflow-taxonomy material before.
+matrix-vector product for free" (steps 2, 8) — no deeper circuit-design
+text is needed; Sze et al. (2017) is also the right on-ramp for anyone who
+hasn't seen the dataflow-taxonomy material before starting step 5.
 
 ---
 
@@ -690,70 +496,23 @@ who hasn't seen the dataflow-taxonomy material before.
 
 **Start here:** none yet — `sciml/DESIGN.md` will exist once step 1 lands.
 
-| Planned step | Topic |
-|---|---|
-| 1 | ODE solver library (explicit Euler, RK4, implicit/backward Euler) |
-| 2 | Stability & stiffness analysis |
-| 3 | SDE solver (Euler-Maruyama, Milstein) |
-| 4 | Neural ODEs (adjoint sensitivity) |
-| 5 | Deep Equilibrium Models |
-| 6 | State-space model layer vs. attention |
-| 7 | Diffusion / flow-matching generative model |
-| 8 | Energy-based model |
-| 9 | muP-style scaling study |
-| 10 | Physics-informed / noise-aware training (bridges to Phase 17 step 1) |
+- **Step 1 — ODE solver library**: no dedicated citation; see Iserles under Background below before starting.
+- **Step 2 — Stability & stiffness analysis**: no dedicated citation; same Iserles background as step 1.
+- **Step 3 — SDE solver**: Kloeden, P.E. & Platen, E. (1992), *Numerical Solution of Stochastic Differential Equations* — the standard reference for Euler-Maruyama/Milstein and their convergence-order guarantees.
+- **Step 4 — Neural ODEs**: Chen, R.T.Q., Rubanova, Y., Bettencourt, J. & Duvenaud, D. (2018), *"Neural Ordinary Differential Equations"* (NeurIPS, best paper) — parameterize `dx/dt` with a network, backprop via the adjoint method instead of unrolling; Pontryagin, L.S. et al. (1962), *The Mathematical Theory of Optimal Control Processes* — the classical origin of the adjoint/costate method Chen et al. repurpose, useful for understanding *why* the adjoint ODE gives the right gradient.
+- **Step 5 — Deep Equilibrium Models**: Bai, S., Kolter, J.Z. & Koltun, V. (2019), *"Deep Equilibrium Models"* (NeurIPS) — the fixed-point-layer formulation and implicit-function-theorem backprop; Broyden, C.G. (1965), *"A Class of Methods for Solving Nonlinear Simultaneous Equations"* — the quasi-Newton fixed-point solver this step can use instead of plain fixed-point iteration.
+- **Step 6 — State-space model layer**: Gu, A., Goel, K. & Ré, C. (2021), *"Efficiently Modeling Long Sequences with Structured State Spaces"* (S4) — the linear state-space recurrence layer this step implements; Gu, A. & Dao, T. (2023), *"Mamba: Linear-Time Sequence Modeling with Selective State Spaces"* — the input-dependent (selective) extension, background for the writeup even if the implemented layer stays closer to plain S4.
+- **Step 7 — Diffusion / flow-matching generative model**: Sohl-Dickstein, J. et al. (2015), *"Deep Unsupervised Learning using Nonequilibrium Thermodynamics"* — the original diffusion-model formulation; Ho, J., Jain, A. & Abbeel, P. (2020), *"Denoising Diffusion Probabilistic Models"* (DDPM) — the practical forward-noising/learned-reverse-process formulation this step implements; Lipman, Y. et al. (2023), *"Flow Matching for Generative Modeling"* — the continuous-normalizing-flow alternative this step optionally also implements.
+- **Step 8 — Energy-based model**: LeCun, Y., Chopra, S., Hadsell, R., Ranzato, M. & Huang, F. (2006), *"A Tutorial on Energy-Based Learning"* — the EBM formulation; Hinton, G. (2002), *"Training Products of Experts by Minimizing Contrastive Divergence"* — the specific training procedure this step can use.
+- **Step 9 — muP-style scaling study**: Yang, G. & Hu, E.J. et al. (2021/2022), *"Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer"* (muP) — the entire claim under test: hyperparameters tuned at small width transfer to large width under the right parameterization.
+- **Step 10 — Physics-informed / noise-aware training bridge**: no new citation — trains a real model through Phase 17 step 1's device-noise model, structurally mirroring Phase 14 step 5's adversarial-training loop with the adversary replaced by device noise.
 
-**Primary sources:**
-- Chen, R.T.Q., Rubanova, Y., Bettencourt, J. & Duvenaud, D. (2018),
-  *"Neural Ordinary Differential Equations"* (NeurIPS, best paper) — step
-  4's entire approach: parameterize `dx/dt` with a network, backprop via
-  the adjoint method instead of unrolling the solver.
-- Pontryagin, L.S. et al. (1962), *The Mathematical Theory of Optimal
-  Control Processes* — the classical origin of the adjoint/costate method
-  Chen et al. (2018) repurpose for backprop; useful for understanding
-  *why* the adjoint ODE gives the right gradient, not just that it does.
-- Kloeden, P.E. & Platen, E. (1992), *Numerical Solution of Stochastic
-  Differential Equations* — the standard reference for Euler-Maruyama/
-  Milstein (step 3) and their convergence-order guarantees.
-- Bai, S., Kolter, J.Z. & Koltun, V. (2019), *"Deep Equilibrium Models"*
-  (NeurIPS) — step 5's fixed-point-layer formulation and
-  implicit-function-theorem backprop.
-- Broyden, C.G. (1965), *"A Class of Methods for Solving Nonlinear
-  Simultaneous Equations"* — the quasi-Newton fixed-point solver step 5
-  can use in place of plain fixed-point iteration.
-- Gu, A., Goel, K. & Ré, C. (2021), *"Efficiently Modeling Long Sequences
-  with Structured State Spaces"* (S4) — step 6's linear state-space
-  recurrence layer.
-- Gu, A. & Dao, T. (2023), *"Mamba: Linear-Time Sequence Modeling with
-  Selective State Spaces"* — the input-dependent (selective) extension of
-  S4, background for step 6's writeup even if the implemented layer stays
-  closer to plain S4 for tractability.
-- Sohl-Dickstein, J. et al. (2015), *"Deep Unsupervised Learning using
-  Nonequilibrium Thermodynamics"* — the original diffusion-model
-  formulation.
-- Ho, J., Jain, A. & Abbeel, P. (2020), *"Denoising Diffusion Probabilistic
-  Models"* (DDPM) — the practical forward-noising/learned-reverse-process
-  formulation step 7 implements.
-- Lipman, Y. et al. (2023), *"Flow Matching for Generative Modeling"* — the
-  continuous-normalizing-flow alternative to diffusion step 7 optionally
-  also implements.
-- LeCun, Y., Chopra, S., Hadsell, R., Ranzato, M. & Huang, F. (2006), *"A
-  Tutorial on Energy-Based Learning"* — step 8's EBM formulation and
-  contrastive-divergence/score-matching training.
-- Hinton, G. (2002), *"Training Products of Experts by Minimizing
-  Contrastive Divergence"* — the specific contrastive-divergence training
-  procedure step 8 can use.
-- Yang, G. & Hu, E.J. et al. (2021/2022), *"Tensor Programs V: Tuning
-  Large Neural Networks via Zero-Shot Hyperparameter Transfer"* (muP) —
-  step 9's entire claim under test: hyperparameters tuned at small width
-  transfer to large width under the right parameterization.
-
-**Background:** an ODE/PDE course covering explicit-vs-implicit solvers
-and stability (any standard numerical-methods text, e.g. Iserles, *A First
-Course in the Numerical Analysis of Differential Equations*) is the right
-on-ramp before step 1; Goodfellow, Bengio & Courville's *Deep Learning*
-ch. 20 (generative models) is useful connective tissue between steps 7/8
-if the primary sources above move too fast.
+**Background:** an ODE/PDE course covering explicit-vs-implicit solvers and
+stability (Iserles, *A First Course in the Numerical Analysis of
+Differential Equations*) is the right on-ramp before step 1; Goodfellow,
+Bengio & Courville's *Deep Learning*, ch. 20 (generative models) is useful
+connective tissue between steps 7 and 8 if the primary sources above move
+too fast.
 
 ---
 
@@ -762,40 +521,12 @@ if the primary sources above move too fast.
 **Start here:** none yet — `framework_native/DESIGN.md` will exist once
 step 1 lands.
 
-| Planned step | Topic |
-|---|---|
-| 1 | PyTorch port of `transformer/` |
-| 2 | `torch.compile` benchmarking |
-| 3 | DDP over CPU (`gloo`) |
-| 4 | FSDP vs. hand-written ZeRO |
-| 5 | JAX port (`jit`/`grad`/`vmap`/`pmap`) |
-| 6 | One real run through a production framework |
-
-**Primary sources:**
-- Paszke, A. et al. (2019), *"PyTorch: An Imperative Style,
-  High-Performance Deep Learning Library"* — the autograd/eager-execution
-  design step 1 targets directly.
-- Li, S. et al. (2020), *"PyTorch Distributed: Experiences on Accelerating
-  Data Parallel Training"* — the real DDP paper (gradient bucketing,
-  overlapping backward with all-reduce) step 3 is built on and compared
-  against `distributed_training/data_parallel`.
-- Zhao, Y. et al. (2023), *"PyTorch FSDP: Experiences on Scaling Fully
-  Sharded Data Parallel"* — step 4's target, and the direct paper-level
-  counterpart to compare against `zero1`/`zero2`/`zero3`'s own design
-  (which independently implements Rajbhandari et al.'s ZeRO, see Phase 6
-  above — FSDP is essentially ZeRO stage 3 as a first-class PyTorch API).
-- Bradbury, J. et al. (2018), *JAX: composable transformations of
-  Python+NumPy programs* (software, with an accompanying design writeup)
-  — the `jit`/`grad`/`vmap`/`pmap` functional-transform model step 5
-  targets; already partially in use for `tpu_engine`.
-- PyTorch documentation: *TorchDynamo/TorchInductor* (`torch.compile`
-  internals) — needed to interpret step 2's speedup-or-not result rather
-  than treat it as a black box.
-- Documentation for whichever of PyTorch Lightning / DeepSpeed / Ray Train
-  ends up used in step 6 — Rasley, J. et al. (2020), *"DeepSpeed: System
-  Optimizations Enable Training Deep Learning Models with Over 100 Billion
-  Parameters"* if DeepSpeed; Moritz, P. et al. (2018), *"Ray: A
-  Distributed Framework for Emerging AI Applications"* if Ray Train.
+- **Step 1 — PyTorch port of `transformer/`**: Paszke, A. et al. (2019), *"PyTorch: An Imperative Style, High-Performance Deep Learning Library"* — the autograd/eager-execution design this step targets directly.
+- **Step 2 — `torch.compile` benchmarking**: no academic citation; see PyTorch's TorchDynamo/TorchInductor documentation under Vendor docs — needed to interpret the step's speedup-or-not result rather than treat it as a black box.
+- **Step 3 — DDP over CPU (`gloo`)**: Li, S. et al. (2020), *"PyTorch Distributed: Experiences on Accelerating Data Parallel Training"* — the real DDP paper (gradient bucketing, overlapping backward with all-reduce) this step is built on and compared against Phase 6 step 3's hand-written `data_parallel`.
+- **Step 4 — FSDP vs. hand-written ZeRO**: Zhao, Y. et al. (2023), *"PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel"* — the direct paper-level counterpart to compare against Phase 6 steps 7-9's `zero1`/`zero2`/`zero3` (FSDP is essentially ZeRO stage 3 as a first-class PyTorch API — see Rajbhandari et al. 2020 under Phase 6 step 7).
+- **Step 5 — JAX port**: Bradbury, J. et al. (2018), *JAX: composable transformations of Python+NumPy programs* — the `jit`/`grad`/`vmap`/`pmap` functional-transform model this step targets; already partially in use for Phase 8's `tpu_engine`.
+- **Step 6 — One real run through a production framework**: Rasley, J. et al. (2020), *"DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters"* — if DeepSpeed ends up used; Moritz, P. et al. (2018), *"Ray: A Distributed Framework for Emerging AI Applications"* — if Ray Train ends up used instead. Documentation for whichever framework is actually chosen once step 6 lands.
 
 **Background:** none beyond what Phase 6 already assumes (backprop,
 optimizers, data/tensor/pipeline parallelism) — this phase is explicitly
@@ -806,23 +537,24 @@ not new theory.
 
 ## Cross-cutting: testing & methodology
 
-These apply across every phase, not to one:
+These apply across every phase, not to one step:
 
-- **Property-based testing** (`foundation/proptest`) — Claessen & Hughes
-  (2000), *QuickCheck* (already listed under Phase 1); reused directly by
-  `inference_serving/paged_kv`'s 300-trial property test.
-- **TSan/ASan/UBSan discipline** — every concurrent structure must be race-
-  clean before a step counts as done (see project memory:
-  `feedback_tsan_discipline`). Background: ThreadSanitizer's algorithm is
-  Serebryany, K. & Iskhodzhanov, T. (2009), *"ThreadSanitizer: Data Race
-  Detection in Practice"*.
-- **Formal verification** (`fpga_engine/symbiyosys`) — k-induction model
-  checking; Sheeran, M., Singh, S. & Stålmarck, G. (2000), *"Checking Safety
-  Properties Using Induction and a SAT-Solver"* is the standard reference
-  for the k-induction technique SymbiYosys's `mode prove` uses.
-- **Roofline modeling** — Williams et al. 2009 (already listed under Phase
-  2), reused verbatim in Phase 3 and structurally in Phase 8's MXU/HBM
-  analysis.
+- **Property-based testing** — Claessen & Hughes (2000), *QuickCheck*
+  (Phase 1 step 17); reused directly by Phase 9 step 1's 300-trial
+  `paged_kv` property test.
+- **TSan/ASan/UBSan discipline** — every concurrent structure (Phase 1
+  steps 3-13) must be race-clean before a step counts as done (see project
+  memory: `feedback_tsan_discipline`). Background: Serebryany, K. &
+  Iskhodzhanov, T. (2009), *"ThreadSanitizer: Data Race Detection in
+  Practice"*.
+- **Formal verification** — Phase 7 step 21 and Phase 10 step 5's
+  k-induction model checking; Sheeran, M., Singh, S. & Stålmarck, G.
+  (2000), *"Checking Safety Properties Using Induction and a SAT-Solver"*
+  is the standard reference for the k-induction technique SymbiYosys's
+  `mode prove` uses.
+- **Roofline modeling** — Williams et al. (2009), used verbatim in Phase 2
+  step 10 and Phase 3 step 21, and structurally in Phase 8's MXU/HBM
+  analysis (steps 5-6, 9).
 
 ---
 
@@ -898,8 +630,8 @@ review · Zhao et al. (2023) PyTorch FSDP.
 | Area | Doc |
 |---|---|
 | CPU | Intel 64/IA-32 Optimization Reference Manual |
-| GPU | CUDA C++ Programming Guide, PTX ISA, NVML API reference, Nsight Compute/Systems docs, Hopper Architecture Whitepaper |
-| Compiler | MLIR language reference, TableGen ODS reference, LLVM IR reference manual |
+| GPU | CUDA C++ Programming Guide, PTX ISA, NVML API reference, Nsight Compute/Systems docs, Hopper Architecture Whitepaper, Triton language docs, CUTLASS docs |
+| Compiler | MLIR language reference, TableGen ODS reference, LLVM IR reference manual, libFuzzer docs |
 | Networking | libfabric/EFA programmer's guide, gRPC C++ docs, FlatBuffers docs, AF_XDP kernel docs, NCCL developer guide, IEEE 1588 (PTP) |
 | Distributed systems | TLA+ (*Specifying Systems*), TLC model checker docs |
 | FPGA | Vivado Design Suite UG901/UG904, Vitis HLS UG1399, UltraScale+ architecture docs, XRT architecture/API docs, Vitis AI User Guide, P4_16 Language Specification, cocotb docs, SymbiYosys/Yosys docs |
