@@ -43,10 +43,8 @@ consolidated under a phase instead of a step.
   structure.
 - **Phases 17-19** (added 2026-08-09, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
   close a gap found by comparing this repo against a batch of analog/
-  physics-based-AI-compute job descriptions. Phases 17 and 18 are both
-  CODE COMPLETE (8/8 and 10/10 steps) as of 2026-08-09; Phase 19 hasn't
-  started. Its steps have no in-repo doc pointer or commit yet — treat
-  them as pure background reading to have in hand before that code lands.
+  physics-based-AI-compute job descriptions. All three are now CODE
+  COMPLETE (8/8, 10/10, 6/6 steps) as of 2026-08-09.
 
 ---
 
@@ -545,22 +543,24 @@ too fast.
 
 ---
 
-## Phase 19: Framework-Native Training (PyTorch/JAX) — 5/6 steps built
+## Phase 19: Framework-Native Training (PyTorch/JAX) — CODE COMPLETE (6/6 steps)
 
-**Start here:** `framework_native/pytorch_transformer/README.md`,
+**Start here:** `framework_native/README.md` and `framework_native/DESIGN.md`
+for the phase-level writeup; each step's own README
+(`framework_native/pytorch_transformer/README.md`,
 `framework_native/torch_compile_bench/README.md`,
 `framework_native/ddp_gloo/README.md`,
 `framework_native/fsdp_vs_zero/README.md`,
-`framework_native/jax_transformer/README.md` (steps 1-5, the only ones
-landed so far). Full `framework_native/DESIGN.md` will exist once the
-phase wraps up. Scoped in `e523a33`.
+`framework_native/jax_transformer/README.md`,
+`framework_native/production_framework/README.md`) for full methodology
+and captured output. Scoped in `e523a33`.
 
 - **Step 1 — PyTorch port of `transformer/`** (`framework_native/pytorch_transformer/`) [`619cb74`]: Paszke, A. et al. (2019), *"PyTorch: An Imperative Style, High-Performance Deep Learning Library"* — the autograd/eager-execution design this step targets directly. Real result: trained on the identical corpus/config/hyperparameters as `transformer_test.cpp`'s real captured run, converges to the same qualitative place (loss 2.96->0.026 vs. C++'s 3.19->0.017) and achieves the exact same greedy-decode-the-corpus-back correctness bar. Also fixed a real environment issue: `torch==2.2.2` (platform-capped, Intel Mac support dropped after this version) needed `numpy<2`/`scipy<1.14` pinned to fix a broken `torch.from_numpy` ABI mismatch against `.venv`'s numpy 2.5.1.
 - **Step 2 — `torch.compile` benchmarking** (`framework_native/torch_compile_bench/`) [`b82b4d3`]: no academic citation; see PyTorch's TorchDynamo/TorchInductor documentation under Vendor docs. Real result: `torch.compile()` raises `RuntimeError: Dynamo is not supported on Python 3.12+` on this platform, verified by actually calling it — a genuine two-constraint intersection (torch capped at 2.2.2 on Intel Mac; Dynamo's Python 3.12 support only in torch>=2.4), not a bug or a benchmark number.
 - **Step 3 — DDP over CPU (`gloo`)** (`framework_native/ddp_gloo/`) [`0ffde4c`]: Li, S. et al. (2020), *"PyTorch Distributed: Experiences on Accelerating Data Parallel Training"* — the real DDP paper (gradient bucketing, overlapping backward with all-reduce) this step is built on and compared against Phase 6 step 3's hand-written `data_parallel`. Real result: 4 genuine separate OS processes (`torch.multiprocessing` spawn), final weights match the single-process baseline to `0.000000` max absolute difference.
 - **Step 4 — FSDP vs. hand-written ZeRO** (`framework_native/fsdp_vs_zero/`) [`2cb28ea`]: Zhao, Y. et al. (2023), *"PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel"* — the direct paper-level counterpart to compare against Phase 6 steps 7-9's `zero1`/`zero2`/`zero3` (FSDP FULL_SHARD is ZeRO stage 3 as a first-class PyTorch API — see Rajbhandari et al. 2020 under Phase 6 step 7). Three real bugs found and fixed (a CUDA-fallback crash on CPU-only builds, a collective-operation hang from gating `summon_full_params` behind `if rank==0`, a sharded-storage crash from using the pre-wrap model object outside that context). Real result: rank 0's local parameter count measured at exactly 25.0% (1/world_size for 4 ranks), matching ZeRO-3's own design target.
 - **Step 5 — JAX port** (`framework_native/jax_transformer/`) [`d27d94d`]: Bradbury, J. et al. (2018), *JAX: composable transformations of Python+NumPy programs* — the `jit`/`grad`/`vmap`/`pmap` functional-transform model this step targets; already partially in use for Phase 8's `tpu_engine`. Real result: converges to 0.0139 loss (vs. C++'s 0.0171, PyTorch's 0.0263) with the exact same greedy-decode correctness bar — three independent implementations now agree; `pmap`'s cross-device gradient average (4 simulated devices via `XLA_FLAGS`) matches a manual average exactly (`0.00e+00`).
-- **Step 6 — One real run through a production framework**: **not yet implemented**; Rasley, J. et al. (2020), *"DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters"* — if DeepSpeed ends up used; Moritz, P. et al. (2018), *"Ray: A Distributed Framework for Emerging AI Applications"* — if Ray Train ends up used instead. Documentation for whichever framework is actually chosen once step 6 lands.
+- **Step 6 — One real run through a production framework** (`framework_native/production_framework/`) [`7c44a44`]: Rasley, J. et al. (2020), *"DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters"* — attempted first per plan, and genuinely doesn't run on this platform, confirmed by two independent real failures (a Python 3.12 `distutils` stdlib removal, fixable via `setuptools<72`; then DeepSpeed's own `@compiler.compile()` decorator at import time hitting step 2's exact same Dynamo/Python-3.12 wall, not fixable). Moritz, P. et al. (2018), *"Ray: A Distributed Framework for Emerging AI Applications"* — the real, working fallback used instead. Real result: Ray Train's `TorchTrainer`, 2 real DDP worker processes, loss 2.9640->0.0264, matching step 1's standalone PyTorch numbers almost exactly; also fixed a second real bug (Ray worker actor processes don't inherit the driver's `sys.path`, fixed by making the training script fully self-contained).
 
 **Background:** none beyond what Phase 6 already assumes (backprop,
 optimizers, data/tensor/pipeline parallelism) — this phase is explicitly
