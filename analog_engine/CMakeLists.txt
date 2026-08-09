@@ -8,3 +8,4 @@ cmake_minimum_required(VERSION 3.25)
 # numeric/simulation code.
 
 add_subdirectory(device_model)
+add_subdirectory(crossbar_mac)
