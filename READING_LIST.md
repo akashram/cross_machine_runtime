@@ -545,12 +545,13 @@ too fast.
 
 ---
 
-## Phase 19: Framework-Native Training (PyTorch/JAX) — 4/6 steps built
+## Phase 19: Framework-Native Training (PyTorch/JAX) — 5/6 steps built
 
 **Start here:** `framework_native/pytorch_transformer/README.md`,
 `framework_native/torch_compile_bench/README.md`,
 `framework_native/ddp_gloo/README.md`,
-`framework_native/fsdp_vs_zero/README.md` (steps 1-4, the only ones
+`framework_native/fsdp_vs_zero/README.md`,
+`framework_native/jax_transformer/README.md` (steps 1-5, the only ones
 landed so far). Full `framework_native/DESIGN.md` will exist once the
 phase wraps up. Scoped in `e523a33`.
 
@@ -558,7 +559,7 @@ phase wraps up. Scoped in `e523a33`.
 - **Step 2 — `torch.compile` benchmarking** (`framework_native/torch_compile_bench/`) [`b82b4d3`]: no academic citation; see PyTorch's TorchDynamo/TorchInductor documentation under Vendor docs. Real result: `torch.compile()` raises `RuntimeError: Dynamo is not supported on Python 3.12+` on this platform, verified by actually calling it — a genuine two-constraint intersection (torch capped at 2.2.2 on Intel Mac; Dynamo's Python 3.12 support only in torch>=2.4), not a bug or a benchmark number.
 - **Step 3 — DDP over CPU (`gloo`)** (`framework_native/ddp_gloo/`) [`0ffde4c`]: Li, S. et al. (2020), *"PyTorch Distributed: Experiences on Accelerating Data Parallel Training"* — the real DDP paper (gradient bucketing, overlapping backward with all-reduce) this step is built on and compared against Phase 6 step 3's hand-written `data_parallel`. Real result: 4 genuine separate OS processes (`torch.multiprocessing` spawn), final weights match the single-process baseline to `0.000000` max absolute difference.
 - **Step 4 — FSDP vs. hand-written ZeRO** (`framework_native/fsdp_vs_zero/`) [`2cb28ea`]: Zhao, Y. et al. (2023), *"PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel"* — the direct paper-level counterpart to compare against Phase 6 steps 7-9's `zero1`/`zero2`/`zero3` (FSDP FULL_SHARD is ZeRO stage 3 as a first-class PyTorch API — see Rajbhandari et al. 2020 under Phase 6 step 7). Three real bugs found and fixed (a CUDA-fallback crash on CPU-only builds, a collective-operation hang from gating `summon_full_params` behind `if rank==0`, a sharded-storage crash from using the pre-wrap model object outside that context). Real result: rank 0's local parameter count measured at exactly 25.0% (1/world_size for 4 ranks), matching ZeRO-3's own design target.
-- **Step 5 — JAX port**: **not yet implemented**; Bradbury, J. et al. (2018), *JAX: composable transformations of Python+NumPy programs* — the `jit`/`grad`/`vmap`/`pmap` functional-transform model this step targets; already partially in use for Phase 8's `tpu_engine`.
+- **Step 5 — JAX port** (`framework_native/jax_transformer/`) [`d27d94d`]: Bradbury, J. et al. (2018), *JAX: composable transformations of Python+NumPy programs* — the `jit`/`grad`/`vmap`/`pmap` functional-transform model this step targets; already partially in use for Phase 8's `tpu_engine`. Real result: converges to 0.0139 loss (vs. C++'s 0.0171, PyTorch's 0.0263) with the exact same greedy-decode correctness bar — three independent implementations now agree; `pmap`'s cross-device gradient average (4 simulated devices via `XLA_FLAGS`) matches a manual average exactly (`0.00e+00`).
 - **Step 6 — One real run through a production framework**: **not yet implemented**; Rasley, J. et al. (2020), *"DeepSpeed: System Optimizations Enable Training Deep Learning Models with Over 100 Billion Parameters"* — if DeepSpeed ends up used; Moritz, P. et al. (2018), *"Ray: A Distributed Framework for Emerging AI Applications"* — if Ray Train ends up used instead. Documentation for whichever framework is actually chosen once step 6 lands.
 
 **Background:** none beyond what Phase 6 already assumes (backprop,
