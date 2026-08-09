@@ -65,3 +65,12 @@ add_subdirectory(adversarial)
 # (clang++, no CMake), same convention as fpga_engine/tpu_engine's *_model.cpp
 # files — see npu_engine/README.md.
 add_subdirectory(npu_engine)
+
+# Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures —
+# fully portable, no gate needed. See sciml/CMakeLists.txt.
+add_subdirectory(sciml)
+
+# Phase 17: Analog & Unconventional Compute Hardware — fully portable (no
+# analog/neuromorphic silicon exists to gate on), pure numeric simulation.
+# See analog_engine/CMakeLists.txt.
+add_subdirectory(analog_engine)
