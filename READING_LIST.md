@@ -41,11 +41,12 @@ consolidated under a phase instead of a step.
 - The final two sections are flat indexes (alphabetical bibliography; vendor
   docs) for looking a specific citation up without walking the whole phase
   structure.
-- **Phases 17-19** (added 2026-08-09, scoped in PLAN.md/SCOPE.md/CLAUDE.md,
-  not yet implemented) close a gap found by comparing this repo against a
-  batch of analog/physics-based-AI-compute job descriptions. Their steps
-  have no in-repo doc pointers and no commits yet — they're pure background
-  reading to have in hand before that code gets written.
+- **Phases 17-19** (added 2026-08-09, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
+  close a gap found by comparing this repo against a batch of analog/
+  physics-based-AI-compute job descriptions. Implementation is in progress
+  as of 2026-08-09 (see each phase's header below for current step count);
+  steps not yet built have no in-repo doc pointer or commit — treat those
+  as pure background reading to have in hand before that code lands.
 
 ---
 
@@ -491,14 +492,15 @@ still-unrun `npu_onnx_export.py` path.
 
 ---
 
-## Phase 17: Analog & Unconventional Compute Hardware — scoped, not yet built
+## Phase 17: Analog & Unconventional Compute Hardware — 2/8 steps built
 
-**Start here:** none yet — `analog_engine/DESIGN.md` will exist once step 1
-lands. Scoped in `e523a33`; no implementation commits yet. Until then,
-PLAN.md's Phase 17 section is the closest thing to a "start here."
+**Start here:** `analog_engine/device_model/README.md`,
+`analog_engine/crossbar_mac/README.md` (steps 1-2, the only ones landed so
+far). Full `analog_engine/DESIGN.md` will exist once the phase wraps up.
+Scoped in `e523a33`.
 
-- **Step 1 — Device non-ideality model**: **not yet implemented**; Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile Memory"* (Proceedings of the IEEE) — the device-physics review this step's noise/drift/endurance model will draw on.
-- **Step 2 — Resistive crossbar MAC simulation**: **not yet implemented**; Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical resistive-crossbar-as-MAC-engine architecture this step will simulate; Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main Memory"* — a second foundational crossbar-PIM architecture, useful contrast; Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated neural-network training using analog memory"* (Nature) — a real measured analog-training result, useful ground-truth calibration for the accuracy-vs-noise curve.
+- **Step 1 — Device non-ideality model** (`analog_engine/device_model/`) [`734fb5d`]: Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile Memory"* (Proceedings of the IEEE) — the device-physics review this step's noise/drift/endurance model draws on. Real bug caught and fixed by the test: the endurance check originally re-rolled a Bernoulli stuck-probability on every write, compounding into a wildly inflated failure rate; fixed with a per-cell fixed failure-threshold percentile compared against a cumulative failure curve.
+- **Step 2 — Resistive crossbar MAC simulation** (`analog_engine/crossbar_mac/`) [`c96dc08`]: Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical resistive-crossbar-as-MAC-engine architecture this step simulates; Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main Memory"* — a second foundational crossbar-PIM architecture, useful contrast; Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated neural-network training using analog memory"* (Nature) — a real measured analog-training result, useful ground-truth calibration for the accuracy-vs-noise curve. Real finding: precision (num_levels) drives MAC accuracy (23.7%->1.8% relative RMSE, 4->64 levels) but crossbar SIZE doesn't (~5-7% relative RMSE flat from 8x8->64x64) — signal and noise both scale as sqrt(M) for random weights.
 - **Step 3 — Non-volatile memory tradeoff comparison**: **not yet implemented**; Yu (2018), same as step 1.
 - **Step 4 — Energy model: analog MAC vs. digital MAC**: **not yet implemented**; Wu, Y.N., Emer, J. & Sze, V. (2019), *"Accelergy: An Architecture-Level Energy Estimation Methodology for Accelerator Designs"* — the energy-estimation methodology this step's shape will mirror.
 - **Step 5 — PPA/dataflow modeling**: **not yet implemented**; Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing of Deep Neural Networks: A Tutorial and Survey"* — the canonical reference for the Weight-/Output-/Input-/Row-Stationary taxonomy this step will implement; Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN Accelerator Evaluation"* — the tool this step will reproduce a minimal version of; Wu, Emer & Sze (2019), same as step 4.
@@ -514,13 +516,14 @@ hasn't seen the dataflow-taxonomy material before starting step 5.
 
 ---
 
-## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — scoped, not yet built
+## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — 2/10 steps built
 
-**Start here:** none yet — `sciml/DESIGN.md` will exist once step 1 lands.
-Scoped in `e523a33`; no implementation commits yet.
+**Start here:** `sciml/ode_solver/README.md`, `sciml/stiffness/README.md`
+(steps 1-2, the only ones landed so far). Full `sciml/DESIGN.md` will exist
+once the phase wraps up. Scoped in `e523a33`.
 
-- **Step 1 — ODE solver library**: **not yet implemented**; no dedicated citation planned; see Iserles under Background below before starting.
-- **Step 2 — Stability & stiffness analysis**: **not yet implemented**; no dedicated citation planned; same Iserles background as step 1.
+- **Step 1 — ODE solver library** (`sciml/ode_solver/`) [`7e475e8`]: no dedicated citation; see Iserles under Background below. Verified against closed-form solutions of three test ODEs (exponential decay, harmonic oscillator, logistic growth); RK4's empirical convergence order measured at 16.11x error reduction per `dt` halving (theory: 16x for a 4th-order method).
+- **Step 2 — Stability & stiffness analysis** (`sciml/stiffness/`) [`62b27a9`]: no dedicated citation; same Iserles background as step 1. Forward Euler's exact stability boundary `dt < 2/|lambda|` measured directly (bounded just below, diverges to `1.1e12` just above); Van der Pol's stiffness ratio measured to grow from complex eigenvalues (non-stiff) at mu=1 to a ~2498 real-eigenvalue ratio at mu=50, via a numerically estimated (finite-difference) Jacobian.
 - **Step 3 — SDE solver**: **not yet implemented**; Kloeden, P.E. & Platen, E. (1992), *Numerical Solution of Stochastic Differential Equations* — the standard reference for Euler-Maruyama/Milstein and their convergence-order guarantees.
 - **Step 4 — Neural ODEs**: **not yet implemented**; Chen, R.T.Q., Rubanova, Y., Bettencourt, J. & Duvenaud, D. (2018), *"Neural Ordinary Differential Equations"* (NeurIPS, best paper) — parameterize `dx/dt` with a network, backprop via the adjoint method instead of unrolling; Pontryagin, L.S. et al. (1962), *The Mathematical Theory of Optimal Control Processes* — the classical origin of the adjoint/costate method Chen et al. repurpose, useful for understanding *why* the adjoint ODE gives the right gradient.
 - **Step 5 — Deep Equilibrium Models**: **not yet implemented**; Bai, S., Kolter, J.Z. & Koltun, V. (2019), *"Deep Equilibrium Models"* (NeurIPS) — the fixed-point-layer formulation and implicit-function-theorem backprop; Broyden, C.G. (1965), *"A Class of Methods for Solving Nonlinear Simultaneous Equations"* — the quasi-Newton fixed-point solver this step can use instead of plain fixed-point iteration.
