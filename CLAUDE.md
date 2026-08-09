@@ -790,25 +790,55 @@ before becoming measurable, ending in a clean echo of Phase 14's own
 robustness/accuracy tradeoff: noisy loss cut ~45% at a real clean-accuracy
 cost). See `sciml/README.md`/`DESIGN.md` for the full phase-level
 writeup.
-**Phase 19: Framework-Native Training (PyTorch/JAX) — not yet started.**
-Lives in `framework_native/`. The one gap that isn't about a new topic but
-about tooling: this repo demonstrates the underlying concepts (autograd,
-ZeRO-style sharding, data parallelism) entirely in hand-rolled C++, which
-doesn't show fluency with the actual industry-standard frameworks several
-JDs list as a minimum qualification. Planned: PyTorch and JAX ports of
-`transformer/`, `torch.compile` benchmarking, a real multi-process DDP run
-over CPU `gloo` diffed against `distributed_training/data_parallel`, a
-real FSDP run structurally compared against hand-written `zero1`/`zero2`/
-`zero3`, and one real run through a production framework (Lightning/
-DeepSpeed/Ray Train). `torch==2.2.2` (CPU wheel) and `ray==2.49.2`
-installed into `.venv` 2026-08-09 (user-directed, same precedent as the
-JAX install for Phase 8) — Lightning/DeepSpeed not yet installed, pending
-step 6. **A real, disclosed gap found while installing**: `torch`'s numpy
-interop is currently broken in this `.venv` (`torch.from_numpy` fails —
-the CPU wheel resolved to `torch==2.2.2`, compiled against numpy 1.x ABI,
-while `.venv` has `numpy==2.5.1`); needs a fix (torch upgrade or a
-numpy-pinned venv) before step 5 (JAX/numpy interop) or any step needing
-`torch`<->`numpy` conversion.
+**Phase 19: Framework-Native Training (PyTorch/JAX) — CODE COMPLETE
+(6/6 steps, 2026-08-09).** Lives in `framework_native/`. The one gap that
+isn't about a new topic but about tooling: this repo demonstrates the
+underlying concepts (autograd, ZeRO-style sharding, data parallelism)
+entirely in hand-rolled C++, which doesn't show fluency with the actual
+industry-standard frameworks several JDs list as a minimum qualification.
+`.venv` (`torch==2.2.2`, `jax==0.4.38`, `ray==2.49.2`); every step
+actually run locally, real captured output in each step's own README.
+`pytorch_transformer` (step 1, a real `torch.nn.Module` port of
+`transformer/`, same toy corpus; loss `2.9640 -> 0.0263` vs. C++'s real
+captured `3.1891 -> 0.0171` — caught and fixed a real environment bug
+first: the CPU wheel's `torch==2.2.2` was compiled against the numpy 1.x
+ABI, broken by `.venv`'s numpy 2.5.1 installed for Phase 8's JAX; fixed
+via `numpy<2`/cascading `scipy<1.14` pins, verified JAX still worked
+afterward). `torch_compile_bench` (step 2, actually calls
+`torch.compile()` rather than assuming; verified a genuine hard platform
+gate — `RuntimeError: Dynamo is not supported on Python 3.12+`, since
+this Mac's newest available torch (2.2.2) predates Dynamo's Python 3.12
+support, which only landed in 2.4, no wheel for Intel Mac). `ddp_gloo`
+(step 3, real `DistributedDataParallel` over 4 actual OS processes via
+`gloo`, diffed against `distributed_training/data_parallel`'s exact
+task; final weights match a single-process baseline to `0.000000` max
+absolute difference). `fsdp_vs_zero` (step 4, real
+`FullyShardedDataParallel` with `FULL_SHARD` mapped to ZeRO-3;
+`torch.multiprocessing.spawn` across 4 CPU processes — found and fixed
+three real bugs along the way: a CUDA-fallback crash needing
+`device_id=torch.device("cpu")` passed explicitly, a
+`summon_full_params()` collective-op hang from gating it behind
+`if rank==0` instead of calling it on every rank, and a sharded-storage
+crash from touching the pre-wrap model outside that context; final
+measurement: each rank holds exactly 25.0% of parameters, matching
+ZeRO-3's design target precisely). `jax_transformer` (step 5, a
+`jit`/`grad`/`vmap`/`pmap` JAX port, `pmap` correctness checked across 4
+simulated CPU devices via `XLA_FLAGS`; loss `3.69 -> 0.014` — a third
+independent implementation, alongside C++ and PyTorch, converging on the
+same architecture/task). `production_framework` (step 6, DeepSpeed
+attempted first per plan and found to hit two real, independent
+platform walls — a Python-3.12 `distutils` stdlib removal, fixed via
+`setuptools<72`, then DeepSpeed's own `@compiler.compile()` decorator at
+import time hitting step 2's exact same Dynamo/Python-3.12 wall,
+unfixable since it's baked into DeepSpeed's own source; Ray Train used
+as the real, working fallback, 2 real DDP worker processes,
+`loss 2.9640 -> 0.0264`, matching step 1's standalone numbers almost
+exactly — plus a second real bug, Ray worker actor processes not
+inheriting the driver's `sys.path`, fixed by making the training script
+fully self-contained rather than importing across the process
+boundary). See `framework_native/README.md`/`DESIGN.md` for the full
+phase-level writeup, including the environment-debugging thread
+connecting steps 1/2/6's shared platform constraint.
 
 See `READING_LIST.md` for the full citation list backing all three phases
 (analog/PPA-modeling papers, SciML/unconventional-architecture papers,
@@ -849,20 +879,24 @@ hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
 measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
 and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: Phase 19, then the hardware validation pass below.** Every
-phase in the original local-implementation order (1-10, 12-16) is
-code-complete, and Phases 17 and 18 (both scoped 2026-08-09) joined them
-as fully code-complete the same day. Phase 19 (framework-native training)
-hasn't started (PyTorch/Ray now installed, Lightning/DeepSpeed pending).
-After it's code-complete, what's left across the
-entire project is: (a) the hardware validation pass itself (GPU/FPGA/TPU/
-multi-node/eBPF, phases 3-9 in original order, plus Phase 3's new
-Triton/CUTLASS steps), blocked on provisioning cloud hardware; (b) Phase
-15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5 (Docker/kubectl/
-cluster, none installed locally — see the pre-hardware TODO in project
-memory on the standing "no new local installs without asking" decision,
-which now also covers Docker/kubectl alongside the existing JAX/Java-TLC
-entries).
+**Next up: Phase 3 steps 25-26 (Triton, CUTLASS), then the hardware
+validation pass below.** Every phase in the original local-implementation
+order (1-10, 12-16) is code-complete, and Phases 17, 18, and 19 (all
+scoped/completed 2026-08-09) joined them as fully code-complete the same
+day. The only remaining locally-codeable work in the entire project is
+Phase 3's two new steps (Triton kernel port, CUTLASS GEMM instance — both
+hardware-gated/unrun like the rest of Phase 3, written code + comparison
+analysis only). Once those land, the full `ctest` suite runs once as a
+checkpoint (per standing instruction: deferred until both Phase 19 and
+Phase 3 steps 25-26 are done), and everything left across the entire
+project is hardware/toolchain validation: (a) the hardware validation
+pass itself (GPU/FPGA/TPU/multi-node/eBPF, phases 3-9 in original order,
+plus Phase 3's new Triton/CUTLASS steps), blocked on provisioning cloud
+hardware; (b) Phase 15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5
+(Docker/kubectl/cluster, none installed locally — see the pre-hardware
+TODO in project memory on the standing "no new local installs without
+asking" decision, which now also covers Docker/kubectl alongside the
+existing JAX/Java-TLC entries).
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
