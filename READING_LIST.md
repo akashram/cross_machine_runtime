@@ -545,12 +545,13 @@ too fast.
 
 ---
 
-## Phase 19: Framework-Native Training (PyTorch/JAX) — scoped, not yet built
+## Phase 19: Framework-Native Training (PyTorch/JAX) — 1/6 steps built
 
-**Start here:** none yet — `framework_native/DESIGN.md` will exist once
-step 1 lands. Scoped in `e523a33`; no implementation commits yet.
+**Start here:** `framework_native/pytorch_transformer/README.md` (step 1,
+the only one landed so far). Full `framework_native/DESIGN.md` will exist
+once the phase wraps up. Scoped in `e523a33`.
 
-- **Step 1 — PyTorch port of `transformer/`**: **not yet implemented**; Paszke, A. et al. (2019), *"PyTorch: An Imperative Style, High-Performance Deep Learning Library"* — the autograd/eager-execution design this step targets directly.
+- **Step 1 — PyTorch port of `transformer/`** (`framework_native/pytorch_transformer/`) [`619cb74`]: Paszke, A. et al. (2019), *"PyTorch: An Imperative Style, High-Performance Deep Learning Library"* — the autograd/eager-execution design this step targets directly. Real result: trained on the identical corpus/config/hyperparameters as `transformer_test.cpp`'s real captured run, converges to the same qualitative place (loss 2.96->0.026 vs. C++'s 3.19->0.017) and achieves the exact same greedy-decode-the-corpus-back correctness bar. Also fixed a real environment issue: `torch==2.2.2` (platform-capped, Intel Mac support dropped after this version) needed `numpy<2`/`scipy<1.14` pinned to fix a broken `torch.from_numpy` ABI mismatch against `.venv`'s numpy 2.5.1.
 - **Step 2 — `torch.compile` benchmarking**: **not yet implemented**; no academic citation planned; see PyTorch's TorchDynamo/TorchInductor documentation under Vendor docs — needed to interpret the step's speedup-or-not result rather than treat it as a black box.
 - **Step 3 — DDP over CPU (`gloo`)**: **not yet implemented**; Li, S. et al. (2020), *"PyTorch Distributed: Experiences on Accelerating Data Parallel Training"* — the real DDP paper (gradient bucketing, overlapping backward with all-reduce) this step will be built on and compared against Phase 6 step 3's hand-written `data_parallel`.
 - **Step 4 — FSDP vs. hand-written ZeRO**: **not yet implemented**; Zhao, Y. et al. (2023), *"PyTorch FSDP: Experiences on Scaling Fully Sharded Data Parallel"* — the direct paper-level counterpart to compare against Phase 6 steps 7-9's `zero1`/`zero2`/`zero3` (FSDP is essentially ZeRO stage 3 as a first-class PyTorch API — see Rajbhandari et al. 2020 under Phase 6 step 7).
