@@ -492,16 +492,17 @@ still-unrun `npu_onnx_export.py` path.
 
 ---
 
-## Phase 17: Analog & Unconventional Compute Hardware — 2/8 steps built
+## Phase 17: Analog & Unconventional Compute Hardware — 3/8 steps built
 
 **Start here:** `analog_engine/device_model/README.md`,
-`analog_engine/crossbar_mac/README.md` (steps 1-2, the only ones landed so
-far). Full `analog_engine/DESIGN.md` will exist once the phase wraps up.
+`analog_engine/crossbar_mac/README.md`,
+`analog_engine/nvm_comparison/README.md` (steps 1-3, the only ones landed
+so far). Full `analog_engine/DESIGN.md` will exist once the phase wraps up.
 Scoped in `e523a33`.
 
 - **Step 1 — Device non-ideality model** (`analog_engine/device_model/`) [`734fb5d`]: Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile Memory"* (Proceedings of the IEEE) — the device-physics review this step's noise/drift/endurance model draws on. Real bug caught and fixed by the test: the endurance check originally re-rolled a Bernoulli stuck-probability on every write, compounding into a wildly inflated failure rate; fixed with a per-cell fixed failure-threshold percentile compared against a cumulative failure curve.
 - **Step 2 — Resistive crossbar MAC simulation** (`analog_engine/crossbar_mac/`) [`c96dc08`]: Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical resistive-crossbar-as-MAC-engine architecture this step simulates; Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main Memory"* — a second foundational crossbar-PIM architecture, useful contrast; Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated neural-network training using analog memory"* (Nature) — a real measured analog-training result, useful ground-truth calibration for the accuracy-vs-noise curve. Real finding: precision (num_levels) drives MAC accuracy (23.7%->1.8% relative RMSE, 4->64 levels) but crossbar SIZE doesn't (~5-7% relative RMSE flat from 8x8->64x64) — signal and noise both scale as sqrt(M) for random weights.
-- **Step 3 — Non-volatile memory tradeoff comparison**: **not yet implemented**; Yu (2018), same as step 1.
+- **Step 3 — Non-volatile memory tradeoff comparison** (`analog_engine/nvm_comparison/`) [`7f16330`]: Yu (2018), same as step 1. Real finding: RRAM ranks first in an illustrative composite figure-of-merit despite not leading on any single axis (STT-MRAM has ~1000x its endurance, SRAM-CIM 1000x endurance + 20x lower write energy) — RRAM has no hard disqualifier, unlike SRAM-CIM (zero retention, volatile) or STT-MRAM (2 analog levels, structurally near-binary).
 - **Step 4 — Energy model: analog MAC vs. digital MAC**: **not yet implemented**; Wu, Y.N., Emer, J. & Sze, V. (2019), *"Accelergy: An Architecture-Level Energy Estimation Methodology for Accelerator Designs"* — the energy-estimation methodology this step's shape will mirror.
 - **Step 5 — PPA/dataflow modeling**: **not yet implemented**; Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing of Deep Neural Networks: A Tutorial and Survey"* — the canonical reference for the Weight-/Output-/Input-/Row-Stationary taxonomy this step will implement; Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN Accelerator Evaluation"* — the tool this step will reproduce a minimal version of; Wu, Emer & Sze (2019), same as step 4.
 - **Step 6 — Systolic array design-space sweep**: **not yet implemented**; Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks"* — the concrete Row-Stationary accelerator design this step and step 5 will be modeled after; Sze et al. (2017), same as step 5.
