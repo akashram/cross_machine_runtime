@@ -492,13 +492,14 @@ still-unrun `npu_onnx_export.py` path.
 
 ---
 
-## Phase 17: Analog & Unconventional Compute Hardware — 5/8 steps built
+## Phase 17: Analog & Unconventional Compute Hardware — 6/8 steps built
 
 **Start here:** `analog_engine/device_model/README.md`,
 `analog_engine/crossbar_mac/README.md`,
 `analog_engine/nvm_comparison/README.md`,
 `analog_engine/energy_model/README.md`,
-`analog_engine/dataflow_model/README.md` (steps 1-5, the only ones landed
+`analog_engine/dataflow_model/README.md`,
+`analog_engine/systolic_sweep/README.md` (steps 1-6, the only ones landed
 so far). Full `analog_engine/DESIGN.md` will exist once the phase wraps up.
 Scoped in `e523a33`.
 
@@ -507,7 +508,7 @@ Scoped in `e523a33`.
 - **Step 3 — Non-volatile memory tradeoff comparison** (`analog_engine/nvm_comparison/`) [`7f16330`]: Yu (2018), same as step 1. Real finding: RRAM ranks first in an illustrative composite figure-of-merit despite not leading on any single axis (STT-MRAM has ~1000x its endurance, SRAM-CIM 1000x endurance + 20x lower write energy) — RRAM has no hard disqualifier, unlike SRAM-CIM (zero retention, volatile) or STT-MRAM (2 analog levels, structurally near-binary).
 - **Step 4 — Energy model: analog MAC vs. digital MAC** (`analog_engine/energy_model/`) [`f2be889`]: Wu, Y.N., Emer, J. & Sze, V. (2019), *"Accelergy: An Architecture-Level Energy Estimation Methodology for Accelerator Designs"* — the energy-estimation methodology this step's shape mirrors. Real finding: ADC overhead dominates analog MAC energy by 121x-361x (pure-compute vs. realistic figure); at 32-level precision, realistic analog (1.505 pJ/MAC) is ~6x WORSE than a purpose-built NPU (0.253 pJ/MAC) though still beats GPU/CPU — a genuinely counter-intuitive result, echoing a real debate in the compute-in-memory literature.
 - **Step 5 — PPA/dataflow modeling** (`analog_engine/dataflow_model/`) [`0529c3f`]: Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing of Deep Neural Networks: A Tutorial and Survey"* — the canonical reference for the Weight-/Output-/Input-/Row-Stationary taxonomy this step implements; Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN Accelerator Evaluation"* — the tool this step reproduces a minimal version of; Wu, Emer & Sze (2019), same as step 4. Real finding: Row-Stationary numerically achieves WS's minimal weight movement AND IS's minimal input movement simultaneously; misaligned M=513 drops PE utilization to 0.8016, reproducing `tpu_engine/mxu_opt`'s independently-built utilization-cliff finding.
-- **Step 6 — Systolic array design-space sweep**: **not yet implemented**; Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks"* — the concrete Row-Stationary accelerator design this step and step 5 will be modeled after; Sze et al. (2017), same as step 5.
+- **Step 6 — Systolic array design-space sweep** (`analog_engine/systolic_sweep/`) [`62a4f7e`]: Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks"* — the concrete Row-Stationary accelerator design this step and step 5 are modeled after; Sze et al. (2017), same as step 5. Real finding: on 7 real GEMM shapes from `transformer/`'s actual trained config, a 128x128 array averages 3.79% utilization vs. 100% at each shape's best-matched size — independently reproduces `tpu_engine/mxu_opt`'s utilization-cliff finding from the opposite sweep direction.
 - **Step 7 — Hardware-algorithm co-design case study**: **not yet implemented**; no new citation planned — will re-derive an existing repo algorithm (Phase 6 step 21's `sparsity_training` or Phase 9 step 6's `gptq`) under analog constraints.
 - **Step 8 — Analog circuit transient surrogate**: **not yet implemented**; no dedicated citation planned — basic circuit theory (Ohm's law, Kirchhoff's current law) is the entire mathematical content needed; see the Background note below.
 
