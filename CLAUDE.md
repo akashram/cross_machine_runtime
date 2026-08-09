@@ -682,14 +682,14 @@ fake test plan — its entire deliverable is a real measurement that
 needs Docker to produce honestly. Full `ctest`: 106/106 passing, zero
 regressions from any of the above.
 
-**Phases 17-19: scoped 2026-08-09, not yet started.** Added while comparing
-this repo against a batch of ~10 job descriptions for analog/physics-based
-AI compute roles (hardware architects, model architects, model-hardware
+**Phases 17-19: scoped 2026-08-09.** Added while comparing this repo
+against a batch of ~10 job descriptions for analog/physics-based AI
+compute roles (hardware architects, model architects, model-hardware
 co-design, training infra, dynamical-systems theorists, SciML solver
 engineers, analog circuit-sim engineers, PPA-modeling engineers). That
 comparison found the repo deeply covers digital accelerator architecture,
 distributed-training mechanics, compilers, and quantization/sparsity, but
-has a clean zero on: analog/physics-based computing, non-volatile memory
+had a clean zero on: analog/physics-based computing, non-volatile memory
 devices, mixed-signal circuit modeling, PPA/dataflow accelerator-design
 tools (Timeloop/Accelergy/CACTI-style), nonlinear dynamical systems (ODE/
 SDE/PDE, stability, adjoint methods), the "unconventional" model
@@ -697,42 +697,99 @@ architectures those roles build instead of plain transformers (SSMs,
 diffusion/flow, Neural ODEs, Deep Equilibrium Models, energy-based models,
 muP scaling), and genuine PyTorch/JAX framework fluency (this repo's whole
 training stack is hand-rolled C++ autograd). Three new phases close this,
-full sections now in PLAN.md/SCOPE.md, following the same non-negotiable
+full sections in PLAN.md/SCOPE.md, following the same non-negotiable
 convention as every phase above (real code, not stubs; run locally
 wherever possible; honestly hardware-gated where not; README per step with
 real measured numbers; design doc per phase):
-- **Phase 17: Analog & Unconventional Compute Hardware** (`analog_engine/`,
-  8 steps) — device non-ideality modeling, resistive-crossbar MAC
-  simulation, NVM tradeoff comparison, analog-vs-digital energy modeling, a
-  from-scratch PPA/dataflow tool (Weight-/Output-/Input-/Row-Stationary),
-  a systolic design-space sweep on `transformer/`'s real GEMM shapes, a
-  hardware-algorithm co-design case study reusing an existing repo
-  algorithm, and an analog circuit transient surrogate. Unlike Phase
-  7/8/15, there's no toolchain gate at all here — no analog/neuromorphic
-  silicon exists to rent, so every step is fully local.
-- **Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures**
-  (`sciml/`, 10 steps, the largest new phase) — ODE/SDE solver libraries
-  (verified against closed-form/Monte-Carlo ground truth), Neural ODEs
-  (adjoint-method gradients, finite-difference-verified like `adversarial/
-  input_gradients`), Deep Equilibrium Models (implicit-function-theorem
-  backprop), a state-space-model layer measured directly against
-  `transformer/`'s attention, diffusion/flow-matching and energy-based
-  generative models, a real muP hyperparameter-transfer measurement, and a
-  noise-aware training bridge into Phase 17's device-noise model. Fully
-  CPU-portable, no hardware gate.
-- **Phase 19: Framework-Native Training (PyTorch/JAX)**
-  (`framework_native/`, 6 steps) — the one gap that isn't about a new
-  topic but about tooling: this repo demonstrates the underlying concepts
-  (autograd, ZeRO-style sharding, data parallelism) entirely in hand-rolled
-  C++, which doesn't show fluency with the actual industry-standard
-  frameworks several JDs list as a minimum qualification. PyTorch and JAX
-  ports of `transformer/`, `torch.compile` benchmarking, a real multi-
-  process DDP run over CPU `gloo` diffed against `distributed_training/
-  data_parallel`, a real FSDP run structurally compared against hand-
-  written `zero1`/`zero2`/`zero3`, and one real run through a production
-  framework (Lightning/DeepSpeed/Ray Train). PyTorch + Lightning +
-  DeepSpeed + Ray approved for local install (2026-08-09), same precedent
-  as the JAX install for Phase 8.
+
+**Phase 17: Analog & Unconventional Compute Hardware — CODE COMPLETE
+(8/8 steps, 2026-08-09).** Lives in `analog_engine/`. Unlike Phase
+7/8/15, there's no toolchain gate at all here — no analog/neuromorphic
+silicon exists to rent, so every step is fully local, actually compiled
+and run, real captured output in each step's own README. `device_model`
+(step 1, RRAM-like conductance-cell noise/drift/endurance model,
+literature-informed constants from Yu 2018 — caught and fixed a real bug:
+the endurance check originally re-rolled a Bernoulli stuck-probability on
+every write, compounding into a 50%-stuck-at-100-writes result 100x below
+rated endurance; fixed via a per-cell fixed failure-threshold percentile
+compared against a cumulative curve, now 4.0%). `crossbar_mac` (step 2,
+Ohm's-law/KCL analog matmul, signed weights via differential G+/G- pairs
+— ISAAC/PRIME's real technique; found precision drives MAC accuracy far
+more than crossbar size: 23.7%->1.8% relative RMSE across a 4-64-level
+precision sweep, but flat ~5-7% across an 8x8-64x64 size sweep, since
+signal and noise both scale as sqrt(M) for random weights).
+`nvm_comparison` (step 3, RRAM vs. PCM vs. STT-MRAM vs. SRAM-CIM,
+literature-grounded; RRAM wins an illustrative figure-of-merit despite
+not leading on any single axis, since it has no hard disqualifier unlike
+SRAM-CIM's volatility or STT-MRAM's near-binary 2 analog levels).
+`energy_model` (step 4, reuses `npu_engine/cost_model`'s existing
+CPU/GPU/NPU TOPS/W constants directly; found ADC overhead dominates
+analog MAC energy by 121x-361x, and at 32-level precision realistic
+analog is ~6x WORSE than a purpose-built NPU though still beats GPU/CPU —
+echoing a real debate in the compute-in-memory literature). `dataflow_model`
+(step 5, a from-scratch minimal Timeloop/Accelergy-style tool implementing
+Weight-/Output-/Input-/Row-Stationary on a GEMM with K-tiling; confirmed
+Row-Stationary numerically achieves WS's minimal weight movement AND IS's
+minimal input movement simultaneously). `systolic_sweep` (step 6, PE-array
+size sweep on 7 real GEMM shapes from `transformer/`'s actual trained
+config; a 128x128 array averages 3.79% utilization vs. 100% at each
+shape's best-matched size — independently reproduces `tpu_engine/mxu_opt`'s
+utilization-cliff finding from the opposite sweep direction).
+`codesign_case_study` (step 7, re-derives Phase 9's real `GptqQuantizer`
+under step 1's device-noise model on a real trained transformer weight;
+weight RMSE behaves exactly as physics predicts, but a real non-monotonic
+end-task perplexity result — caught by the test, not a bug — led to
+replacing an overly strong assertion with a defensible one).
+`circuit_transient` (step 8, an RC step-response model mirroring
+`fpga_engine/thermal_router`'s pattern; tau scales quadratically with
+crossbar size via a distributed Elmore-style line, a third, independent
+reason bigger crossbars aren't free, on top of step 2's statistics-based
+finding). See `analog_engine/README.md`/`DESIGN.md` for the full
+phase-level writeup.
+
+**Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures —
+6/10 steps complete, in progress.** Lives in `sciml/`, fully CPU-portable,
+no hardware gate. `ode_solver` (step 1, explicit Euler/RK4/backward Euler
+verified against closed-form solutions; RK4's measured convergence order
+16.11x per dt-halving vs. theoretical 16x). `stiffness` (step 2, forward
+Euler's exact stability boundary measured to hold precisely; Van der
+Pol's stiffness ratio measured to grow from complex eigenvalues at mu=1
+to a ~2498 real-eigenvalue ratio at mu=50). `sde_solver` (step 3,
+Euler-Maruyama/Milstein on pre-generated shared Brownian paths; empirical
+strong-convergence order landed almost exactly on theory, and Milstein
+verified to reduce to Euler-Maruyama exactly for additive noise).
+`neural_ode` (step 4, adjoint-method gradients reusing `rk4` for both
+forward and backward passes; caught and fixed a real sign bug via the
+finite-difference gradient check — every parameter's relative error was
+exactly 2.0 before the fix). `deq` (step 5, implicit-function-theorem
+backprop through a fixed point, reusing `ode_solver.h`'s linear solve; no
+sign bug this time, gradient check passed on the first run). `ssm_layer`
+(step 6, a generic non-HiPPO linear SSM vs. a directly-implemented
+self-attention layer, both trained via finite-difference GD; op-count
+scaling measured almost exactly on theory, and attention beats the
+generic SSM on a long-range copy task — the literature-motivated reason
+S4's real contribution is HiPPO initialization, not just a linear
+recurrence). Steps 7-10 (diffusion/flow-matching, energy-based models,
+muP scaling study, noise-aware training bridge into Phase 17) remain.
+**Phase 19: Framework-Native Training (PyTorch/JAX) — not yet started.**
+Lives in `framework_native/`. The one gap that isn't about a new topic but
+about tooling: this repo demonstrates the underlying concepts (autograd,
+ZeRO-style sharding, data parallelism) entirely in hand-rolled C++, which
+doesn't show fluency with the actual industry-standard frameworks several
+JDs list as a minimum qualification. Planned: PyTorch and JAX ports of
+`transformer/`, `torch.compile` benchmarking, a real multi-process DDP run
+over CPU `gloo` diffed against `distributed_training/data_parallel`, a
+real FSDP run structurally compared against hand-written `zero1`/`zero2`/
+`zero3`, and one real run through a production framework (Lightning/
+DeepSpeed/Ray Train). `torch==2.2.2` (CPU wheel) and `ray==2.49.2`
+installed into `.venv` 2026-08-09 (user-directed, same precedent as the
+JAX install for Phase 8) — Lightning/DeepSpeed not yet installed, pending
+step 6. **A real, disclosed gap found while installing**: `torch`'s numpy
+interop is currently broken in this `.venv` (`torch.from_numpy` fails —
+the CPU wheel resolved to `torch==2.2.2`, compiled against numpy 1.x ABI,
+while `.venv` has `numpy==2.5.1`); needs a fix (torch upgrade or a
+numpy-pinned venv) before step 5 (JAX/numpy interop) or any step needing
+`torch`<->`numpy` conversion.
 
 See `READING_LIST.md` for the full citation list backing all three phases
 (analog/PPA-modeling papers, SciML/unconventional-architecture papers,
@@ -773,14 +830,13 @@ hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
 measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
 and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: Phases 17-19, then the hardware validation pass below.** Every
+**Next up: Phases 18-19, then the hardware validation pass below.** Every
 phase in the original local-implementation order (1-10, 12-16) is
-code-complete. Phases 17-19 (scoped 2026-08-09, see above) are the newest
-addition to that same "write all local-codeable code before hardware"
-queue — Phase 18 (SciML) and Phase 17 (analog/unconventional compute) are
-both fully CPU-portable with zero hardware gate, so they're next; Phase 19
-(framework-native training) follows once PyTorch/Lightning/DeepSpeed/Ray
-are installed. After all three are code-complete, what's left across the
+code-complete, and Phase 17 (Analog & Unconventional Compute Hardware,
+scoped 2026-08-09) joined them as fully code-complete on the same day.
+Phase 18 (SciML) is 6/10 steps in; Phase 19 (framework-native training)
+hasn't started (PyTorch/Ray now installed, Lightning/DeepSpeed pending).
+After both are code-complete, what's left across the
 entire project is: (a) the hardware validation pass itself (GPU/FPGA/TPU/
 multi-node/eBPF, phases 3-9 in original order, plus Phase 3's new
 Triton/CUTLASS steps), blocked on provisioning cloud hardware; (b) Phase
