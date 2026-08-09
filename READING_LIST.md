@@ -43,11 +43,10 @@ consolidated under a phase instead of a step.
   structure.
 - **Phases 17-19** (added 2026-08-09, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
   close a gap found by comparing this repo against a batch of analog/
-  physics-based-AI-compute job descriptions. Phase 17 is CODE COMPLETE
-  (8/8 steps) as of 2026-08-09; Phase 18 is in progress (see its header
-  below for current step count); Phase 19 hasn't started. Steps not yet
-  built have no in-repo doc pointer or commit — treat those as pure
-  background reading to have in hand before that code lands.
+  physics-based-AI-compute job descriptions. Phases 17 and 18 are both
+  CODE COMPLETE (8/8 and 10/10 steps) as of 2026-08-09; Phase 19 hasn't
+  started. Its steps have no in-repo doc pointer or commit yet — treat
+  them as pure background reading to have in hand before that code lands.
 
 ---
 
@@ -518,14 +517,12 @@ hasn't seen the dataflow-taxonomy material before starting step 5.
 
 ---
 
-## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — 9/10 steps built
+## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — CODE COMPLETE (10/10 steps)
 
-**Start here:** `sciml/ode_solver/README.md`, `sciml/stiffness/README.md`,
-`sciml/sde_solver/README.md`, `sciml/neural_ode/README.md`,
-`sciml/deq/README.md`, `sciml/ssm_layer/README.md`,
-`sciml/diffusion/README.md`, `sciml/ebm/README.md`,
-`sciml/mup_scaling/README.md` (steps 1-9, the only ones landed so far).
-Full `sciml/DESIGN.md` will exist once the phase wraps up. Scoped in
+**Start here:** `sciml/README.md` and `sciml/DESIGN.md` (phase-level
+wrap-up, `372e9d3`), then each step's own README: `ode_solver/`,
+`stiffness/`, `sde_solver/`, `neural_ode/`, `deq/`, `ssm_layer/`,
+`diffusion/`, `ebm/`, `mup_scaling/`, `noise_aware_training/`. Scoped in
 `e523a33`.
 
 - **Step 1 — ODE solver library** (`sciml/ode_solver/`) [`7e475e8`]: no dedicated citation; see Iserles under Background below. Verified against closed-form solutions of three test ODEs (exponential decay, harmonic oscillator, logistic growth); RK4's empirical convergence order measured at 16.11x error reduction per `dt` halving (theory: 16x for a 4th-order method).
@@ -537,7 +534,7 @@ Full `sciml/DESIGN.md` will exist once the phase wraps up. Scoped in
 - **Step 7 — Diffusion / flow-matching generative model** (`sciml/diffusion/`) [`9cca103`]: Sohl-Dickstein, J. et al. (2015), *"Deep Unsupervised Learning using Nonequilibrium Thermodynamics"* — the original diffusion-model formulation; Ho, J., Jain, A. & Abbeel, P. (2020), *"Denoising Diffusion Probabilistic Models"* (DDPM) — the practical forward-noising/learned-reverse-process formulation this step implements. DDPM only, not flow matching (Lipman et al. 2023) — a disclosed scope reduction. Real result: 200 generated samples split 94/106 across a toy two-cluster target (close to true 50/50, not mode-collapsed), each cluster's empirical mean within 0.58/0.32 of the true center.
 - **Step 8 — Energy-based model** (`sciml/ebm/`) [`904fe1a`]: LeCun, Y., Chopra, S., Hadsell, R., Ranzato, M. & Huang, F. (2006), *"A Tutorial on Energy-Based Learning"* — the EBM formulation; Hinton, G. (2002), *"Training Products of Experts by Minimizing Contrastive Divergence"* — the training procedure this step implements, with short-run Langevin MCMC negative sampling. Real, literature-consistent finding from a direct same-binary comparison to step 7: diffusion (1.04 mean distance to true cluster centers) clearly beats the EBM (2.36) at deliberately comparable budgets — the well-documented real difficulty of short-chain CD training vs. diffusion's tractable objective, not a bug.
 - **Step 9 — muP-style scaling study** (`sciml/mup_scaling/`) [`6c0f30f`]: Yang, G. & Hu, E.J. et al. (2021/2022), *"Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer"* (muP) — the entire claim under test: hyperparameters tuned at small width transfer to large width under the right parameterization. Tests the output-layer-LR-scaling mechanism specifically (disclosed scope reduction from the full multi-parameter table). Real result: muP's best LR was exactly 1.0 at all three widths tested (4/8/16); SP's best LR shifted 0.3->0.3->0.1 — an exact confirmation with no tuning to force it, plus SP diverging at 7/15 (width,LR) points vs. muP's 2/15.
-- **Step 10 — Physics-informed / noise-aware training bridge**: **not yet implemented**; no new citation planned — will train a real model through Phase 17 step 1's device-noise model, structurally mirroring Phase 14 step 5's adversarial-training loop with the adversary replaced by device noise.
+- **Step 10 — Physics-informed / noise-aware training bridge** (`sciml/noise_aware_training/`) [`6c3d29b`]: no new citation — trains a real model (step 9's MLP) through Phase 17 step 1's device-noise model, structurally mirroring Phase 14 step 5's adversarial-training loop with the adversary replaced by device noise. Real bug caught by catastrophic training divergence: naive finite-differencing through the quantization+noise pipeline gave a degenerate zero-or-spike gradient — exactly why real QAT needs a Straight-Through Estimator; fixed, then found the robustness benefit needed a stronger noise regime to become measurable, ending in a clean echo of Phase 14's robustness/accuracy tradeoff (noisy loss cut ~45% at a real clean-accuracy cost).
 
 **Background:** an ODE/PDE course covering explicit-vs-implicit solvers and
 stability (Iserles, *A First Course in the Numerical Analysis of
