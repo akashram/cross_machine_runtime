@@ -146,12 +146,15 @@ AWS GPU instance — start with `g4dn.xlarge` (T4, cheapest) for learning, move 
 22. **CUDA MPS setup** — configure MPS server, measure context-switching overhead reduction for multi-process GPU sharing
 23. **NVML power monitoring** — power draw per kernel, thermal throttling detection, integrate into benchmark harness
 24. **Nsight integration in CI** — `ncu --set full` profiling as part of benchmark pipeline, parse and store metrics per commit
+25. **Triton kernels** (added 2026-08-09) — Triton-language reimplementation of step 8/9's elementwise + GEMM kernels; written comparison of what Triton's block-level programming model abstracts away vs. the hand-written thread/warp-level control in steps 4-10.
+26. **CUTLASS GEMM** (added 2026-08-09) — a CUTLASS-template-based GEMM kernel instance; written comparison against step 9's hand-written tiled GEMM and step 19's WGMMA kernel — where CUTLASS's composable-template approach helps vs. where hand-written control still wins.
 
 ### Deliverables
 - `/gpu_engine/` with all kernels
 - Roofline charts per kernel with hardware counter breakdown
 - Flash Attention benchmark vs. cuDNN (should beat it)
 - PTX/SASS analysis writeup for 2-3 key kernels
+- Triton and CUTLASS kernels with written comparisons against the hand-written CUDA path
 - Design doc: "GPU Backend Architecture"
 
 ### Definition of done
@@ -709,6 +712,156 @@ Docker image builds and its containerized `ctest` run matches the local (non-con
 
 ### Note on what this demonstrates
 Unlike Phases 13-15 (new capability domains), this phase demonstrates production deployment maturity — the gap between "the algorithm works" and "this runs reliably in the environment real workloads actually get deployed into." The Docker step (1-2) is fully local and portable; steps 3, 6 are hardware-gated like the backends they expose; steps 4-5, 7 are cluster-gated (need a real Kubernetes cluster, not just `kubectl` locally) — see CLAUDE.md's execution strategy for where this slots into the hardware validation pass.
+
+---
+
+## Phase 17: Analog & Unconventional Compute Hardware
+**Estimated duration: 1–2 months**
+**Position in sequence:** Added 2026-08-09, not in the original 12-phase
+scope. Mirrors Phase 7/8/15's hardware-gated-but-locally-codeable pattern
+— except here there is no toolchain to gate behind at all, only silicon
+(no analog/neuromorphic chip exists to rent), so every step is real,
+locally-runnable numeric/simulation code, not partially unrun. Lives in
+`analog_engine/`.
+
+### What to learn first
+- Analog/physics-based computing paradigms: resistive (RRAM/memristor)
+  crossbar in-memory compute, photonic MAC, SRAM-based compute-in-memory —
+  why analog matrix-vector multiply falls directly out of Ohm's law +
+  Kirchhoff's current law on a crossbar, with no separate "compute" step
+- Non-volatile memory device physics basics: conductance states, read/write
+  noise, conductance drift over time, limited discrete levels, endurance —
+  at the level needed to build a simplified circuit-level surrogate, not a
+  full device-physics simulator
+- The energy argument for analog compute: why moving data (not arithmetic)
+  dominates digital MAC energy, and why in-memory analog compute changes
+  that ratio
+- Accelerator dataflow taxonomy: Weight-Stationary / Output-Stationary /
+  Input-Stationary / Row-Stationary, and what each keeps resident in the PE
+  array vs. re-streams from memory
+- What Timeloop/Accelergy/NeuroSim/CIMLoop/CACTI actually compute (PPA
+  estimation from a workload + architecture description), as the shape
+  step 5 reproduces from scratch
+
+### Build order
+1. **Device non-ideality model** — a parameterized RRAM-like conductance-cell model: read noise, write noise, conductance drift over time, discrete-level/endurance limits. Real numeric model, run locally.
+2. **Resistive crossbar MAC simulation** — analog matrix-vector multiply via Ohm's-law/KCL summation on a simulated crossbar, with step 1's noise injected; measure MAC-accuracy (MSE vs. ideal digital MAC) as a function of crossbar size and effective bit-precision — a real, measured accuracy-vs-scale curve.
+3. **Non-volatile memory tradeoff comparison** — RRAM vs. PCM vs. STT-MRAM vs. SRAM-based compute-in-memory, compared on endurance, retention, write energy, density, and usable analog levels — literature-grounded (no fab access), honestly labeled as such rather than presented as measured.
+4. **Energy model: analog MAC vs. digital MAC** — pJ/MAC crossbar estimate (from literature-grounded energy-per-MAC constants) vs. this repo's existing GPU/CPU/NPU digital energy numbers (`npu_engine/cost_model`, `fpga_engine/clock_gating`'s pattern) — a real quantitative "where and by how much does analog win on energy" comparison.
+5. **PPA/dataflow modeling** — a from-scratch, minimal Timeloop/Accelergy-style tool: given a workload (a GEMM shape) and an architecture description (PE array size, dataflow strategy), compute utilization, data-movement volume per memory level, and an energy estimate. Weight-/Output-/Input-/Row-Stationary explicitly implemented and compared.
+6. **Systolic array design-space sweep** — reuse step 5 to sweep PE-array shape/size against `transformer/`'s real GEMM dimensions; extends `tpu_engine/mxu_opt`'s single-shape utilization-cliff finding into a genuine design-space exploration.
+7. **Hardware-algorithm co-design case study** — re-derive one of this repo's already-real algorithms (`distributed_training/sparsity_training`'s 2:4 structured sparsity, or `inference_serving/gptq`'s low-bit quantization) under analog-specific constraints (discrete conductance levels acting as an extreme low-bit quantizer; crossbar noise floor setting a minimum useful precision) — a concrete worked example of algorithm and hardware NOT being specified independently.
+8. **Analog circuit transient surrogate** — an RC-style step-response simulator for a simplified analog compute cell (settling time / bandwidth as a function of parasitic R/C), same shape as `fpga_engine/thermal_router`'s real RC thermal step-response model applied to circuit dynamics instead of temperature — deliberately scoped below full SPICE, same disclosed-simplification pattern as Phase 14 step 8.
+
+### Deliverables
+- Device noise model and crossbar MAC accuracy-vs-scale curve
+- NVM tradeoff comparison table (literature-grounded, labeled as such)
+- Analog-vs-digital energy comparison with real numbers
+- A working PPA/dataflow model implementing WS/OS/IS/RS, plus a systolic design-space sweep on real GEMM shapes from this repo
+- One real hardware-algorithm co-design case study reusing an existing repo algorithm
+- Analog circuit transient (RC step-response) surrogate
+- Design doc: "Analog & Unconventional Compute Hardware"
+
+### Definition of done
+Every step produces a real, locally-run number/curve/table — no step is stub-shaped. Device-physics constants that can't be measured locally (no fab access) are explicitly sourced from literature and labeled as such rather than presented as measured. The analog-vs-digital energy and co-design findings are derived, not assumed conclusions.
+
+### Hardware access note
+Unlike GPU/FPGA/TPU/NPU, there is no cloud-rental story for analog/
+neuromorphic silicon at all — this is research-lab/foundry-access hardware,
+not a spot instance. Same honest treatment as Phase 15's NPU note: this
+phase stays fully modeled rather than forced into the AWS/GCP cost table.
+
+---
+
+## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures
+**Estimated duration: 2–3 months**
+**Position in sequence:** Added 2026-08-09, not in the original 12-phase
+scope. Fully CPU-portable, no hardware gate at all — like Phase 12/13/14.
+The largest of the three new phases. Lives in `sciml/`.
+
+### What to learn first
+- ODE/SDE/PDE basics: initial value problems, explicit vs. implicit
+  solvers, stability regions, stiff vs. non-stiff systems
+- The adjoint sensitivity method: how to backpropagate through an ODE
+  solver by solving a second, backward-in-time ODE instead of
+  differentiating through every solver step
+- Fixed-point iteration and the implicit function theorem: the two ideas
+  Deep Equilibrium Models need (a fixed point exists and can be found; you
+  can backprop through it without unrolling)
+- Score-based / denoising diffusion basics, and flow matching / continuous
+  normalizing flows as a more direct alternative formulation
+- State-space model recurrence (S4/Mamba-style linear recurrence) vs.
+  attention: why it's O(sequence length) instead of O(length²)
+- muP (maximal update parametrization): what it claims (hyperparameters
+  tuned at small width transfer to large width) and why that claim is
+  falsifiable with a small sweep
+
+### Build order
+1. **ODE solver library** — explicit Euler, classical RK4, implicit/backward Euler (Newton iteration); verified against closed-form solutions of known test ODEs.
+2. **Stability & stiffness analysis** — measure and demonstrate the stability regions of explicit vs. implicit solvers on a stiff test system (e.g. a stiff linear ODE or Van der Pol); a numerically estimated sensitivity/stability metric on a small nonlinear system.
+3. **SDE solver** — Euler-Maruyama (and Milstein), verified against known closed-form moments (mean/variance) of a test SDE (e.g. Ornstein-Uhlenbeck) via Monte Carlo.
+4. **Neural ODEs** — a small NN-parameterized `dx/dt = f_theta(x,t)`, trained via the adjoint sensitivity method (not naive backprop-through-every-step); gradients verified against finite differences the same way `adversarial/input_gradients` verified input gradients.
+5. **Deep Equilibrium Models** — an implicit-depth layer defined by a fixed point `z* = f_theta(z*, x)`, solved via fixed-point iteration (or Broyden's method), with implicit-function-theorem backprop through the fixed point (not unrolling).
+6. **State-space model layer** — a real S4/Mamba-style linear state-space recurrence layer, benchmarked directly against `transformer/`'s attention on a small sequence task for both accuracy and measured asymptotic compute (O(L) vs. O(L²)).
+7. **Diffusion / flow-matching generative model** — a small DDPM-style denoising diffusion model and/or a flow-matching continuous normalizing flow, trained on a toy 2D synthetic distribution, with a real measured sample-quality metric.
+8. **Energy-based model** — a small EBM trained via contrastive divergence or score matching on the same synthetic distribution as step 7, for a direct architecture-family comparison.
+9. **muP-style scaling study** — train an existing model from this phase (or `transformer/`) at 2-3 widths, with and without muP-style learning-rate/init scaling by width; measure whether the optimal hyperparameters actually transfer across width — the specific, falsifiable claim muP makes, tested directly.
+10. **Physics-informed / noise-aware training bridge** — train a real model "through" Phase 17 step 1's device-noise model injected as input/weight perturbations — structurally mirrors Phase 14's adversarial-training loop with the adversary replaced by device noise; the direct hardware-in-the-loop-adjacent result several JDs list as a bonus, done as software-only noise injection since no analog hardware exists here.
+
+### Deliverables
+- ODE/SDE solver library, correctness-verified against closed-form/Monte-Carlo ground truth
+- Neural ODE and DEQ implementations with finite-difference-verified gradients
+- SSM layer with a measured comparison against attention
+- Diffusion/flow-matching and EBM generative models with measured sample quality
+- A real muP hyperparameter-transfer measurement
+- A noise-aware training result connecting back to Phase 17's device model
+- Design doc: "Dynamical Systems, SciML & Physics-Informed Architectures"
+
+### Definition of done
+Every solver is checked against a closed-form or Monte-Carlo ground truth, not just "compiles and runs." Every non-standard gradient method (adjoint, implicit-function-theorem) is finite-difference-verified. The SSM-vs-attention and muP-transfer claims are real measurements with numbers in the README, not assumed conclusions.
+
+---
+
+## Phase 19: Framework-Native Training (PyTorch/JAX)
+**Estimated duration: 1 month**
+**Position in sequence:** Added 2026-08-09, not in the original 12-phase
+scope. Fully CPU-portable and actually run (PyTorch/Lightning/DeepSpeed/
+Ray installed locally, mirroring the existing JAX-for-`tpu_engine`
+precedent). Lives in `framework_native/`. Every step cross-checks against
+a from-scratch implementation this repo already proved correct — the
+point is comparing hand-rolled understanding (Phase 6's autograd/ZeRO/
+data-parallel) against the industry-standard tools, not building
+disconnected parallel demos.
+
+### What to learn first
+- PyTorch autograd internals: `torch.autograd.Function`, the computation
+  graph, what `.backward()` actually does
+- `torch.compile`/TorchDynamo/TorchInductor at a conceptual level: graph
+  capture + fusion, and why CPU speedups are less guaranteed than GPU ones
+- `torch.distributed` process groups and the `gloo` CPU backend; DDP's
+  gradient-bucketing/all-reduce-overlap design; FSDP's parameter-sharding
+  design (directly comparable to this repo's own `zero1`/`zero2`/`zero3`)
+- JAX's functional transform model (`jit`/`vmap`/`pmap`/`grad`) vs.
+  PyTorch's eager-plus-autograd model
+
+### Build order
+1. **PyTorch port of `transformer/`** — a real `torch.nn.Module` reimplementation, trained on the same toy corpus, diffed directly against the from-scratch C++ version's loss trajectory and greedy-decode-the-corpus-back correctness check.
+2. **`torch.compile` benchmarking** — compile step 1's model, measure real CPU wall-clock speedup (or honestly report none/regression if TorchInductor's CPU backend doesn't help at this toy scale) vs. eager mode.
+3. **DDP over CPU (`gloo`)** — reproduce `distributed_training/data_parallel`'s data-parallel training using real `torch.nn.parallel.DistributedDataParallel` across real multi-process ranks (same real-process-per-rank pattern as `distributed_training/training_worker`), loss trajectory diffed directly against the hand-written version.
+4. **FSDP vs. hand-written ZeRO** — reproduce `zero1`/`zero2`/`zero3`'s sharding using real `torch.distributed.fsdp.FullyShardedDataParallel`, with a direct structural comparison of what FSDP shards at each stage vs. what this repo's hand-written ZeRO shards.
+5. **JAX port** — `jit`/`grad`/`vmap` version of the same small transformer (reuses the JAX already installed for `tpu_engine`), plus a simulated multi-device run via `XLA_FLAGS=--xla_force_host_platform_device_count=N` and `pmap`/`jax.sharding`.
+6. **One real run on a production framework** — pick one of PyTorch Lightning / DeepSpeed / Ray Train and get step 1's model training through it end-to-end on CPU; attempt DeepSpeed first, and if its install or feature set turns out to be genuinely GPU/Linux-gated on this Mac, verify that empirically before falling back to Lightning/Ray Train, documenting the gap honestly rather than assuming it.
+
+### Deliverables
+- PyTorch and JAX ports of the transformer with measured agreement against the original C++ version
+- A `torch.compile` speedup (or honest non-speedup) measurement
+- A real multi-process DDP run, diffed against the hand-written data-parallel implementation
+- A real FSDP run with a direct structural comparison against hand-written ZeRO
+- One real run through a production training framework
+- Design doc: "Framework-Native Training" — cross-references Phase 6 throughout
+
+### Definition of done
+Every framework port's numerical output is checked against this repo's existing from-scratch implementation (loss trajectories match / DDP agrees with hand-written data-parallel / FSDP shards what ZeRO shards) — not just "the framework code runs."
 
 ---
 

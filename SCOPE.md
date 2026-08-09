@@ -163,6 +163,8 @@ Deep understanding of TPU microarchitecture demonstrated through implementation 
 - NVSHMEM evaluation vs. NCCL (documented tradeoff)
 - Nsight Systems + Nsight Compute profiling
 - NVML power measurement
+- Triton kernels (added 2026-08-09): block-level-programming-model reimplementation of the elementwise/GEMM kernels, compared against the hand-written CUDA path
+- CUTLASS GEMM (added 2026-08-09): template-based GEMM instance, compared against the hand-written tiled GEMM and WGMMA kernels
 
 ## FPGA Backend
 - Vitis HLS with full pipeline analysis (II=1 targets, loop pipelining, unrolling)
@@ -375,6 +377,47 @@ schedulers, and Phase 6/9's distributed training and serving.)*
 - Gang-scheduled manifests (Kubeflow-`PyTorchJob`-style) for Phase 6's distributed training loop — synchronized multi-pod start, a different scheduling problem from single-pod autoscaling
 - Device plugin gap analysis for FPGA/TPU: honest coverage of what's mature (NVIDIA) vs. far less standardized (Xilinx FPGA device plugins)
 - Custom-scheduler-vs-Kubernetes comparison (cross-referenced from Distributed Layer above): a specific, defensible claim about when Phase 5's from-scratch schedulers are still justified vs. reinventing an existing, better-tested wheel
+
+## Analog & Unconventional Compute Hardware
+*(Added 2026-08-09, not in the original scope — see Phase 17 in PLAN.md.
+Mirrors Phase 7/8/15's hardware-gated pattern, except there is no
+cloud-rentable analog/neuromorphic silicon at all, so every step is
+locally-runnable numeric/simulation code rather than partially unrun.)*
+- Non-volatile memory (RRAM-like) device non-ideality model: read/write noise, conductance drift, discrete-level/endurance limits
+- Resistive crossbar analog MAC simulation (Ohm's law / KCL), noise injected from the device model, measured accuracy-vs-scale/precision curve against ideal digital MAC
+- NVM tradeoff comparison: RRAM vs. PCM vs. STT-MRAM vs. SRAM-based compute-in-memory (endurance, retention, write energy, density, analog levels) — literature-grounded, honestly labeled
+- Analog-vs-digital MAC energy model, extending `npu_engine/cost_model`'s and `fpga_engine/clock_gating`'s pattern
+- A from-scratch minimal Timeloop/Accelergy-style PPA/dataflow model: Weight-/Output-/Input-/Row-Stationary dataflow strategies, utilization, data-movement volume, energy, given a workload + architecture description
+- Systolic array design-space sweep over `transformer/`'s real GEMM shapes, extending `tpu_engine/mxu_opt`'s single-shape utilization-cliff finding
+- Hardware-algorithm co-design case study: re-deriving an existing repo algorithm (2:4 sparsity or GPTQ quantization) under analog constraints (discrete conductance levels, crossbar noise floor)
+- Analog circuit transient surrogate: RC-style step response for a simplified analog cell, same disclosed-simplification pattern as `fpga_engine/thermal_router`
+
+## Dynamical Systems, SciML & Physics-Informed Architectures
+*(Added 2026-08-09, not in the original scope — see Phase 18 in PLAN.md.
+Fully CPU-portable, no hardware gate at all, like Phase 12/13/14.)*
+- ODE solver library: explicit Euler, RK4, implicit/backward Euler, verified against closed-form solutions
+- Stability/stiffness analysis: explicit-vs-implicit stability regions on a stiff test system, plus a sensitivity/stability metric on a small nonlinear system
+- SDE solver: Euler-Maruyama (+ Milstein), verified against known closed-form moments via Monte Carlo
+- Neural ODEs trained via the adjoint sensitivity method, gradients finite-difference-verified the same way `adversarial/input_gradients` verified input gradients
+- Deep Equilibrium Models: fixed-point-defined implicit-depth layer, implicit-function-theorem backprop
+- State-space model (S4/Mamba-style) layer, benchmarked directly against `transformer/`'s attention for accuracy and O(L) vs. O(L²) compute
+- Diffusion (DDPM-style) and/or flow-matching generative model on a toy 2D distribution, measured sample quality
+- Energy-based model (contrastive divergence / score matching) on the same distribution, direct comparison
+- muP-style scaling study: same model at multiple widths, with/without muP-style LR/init scaling, measuring whether optimal hyperparameters actually transfer across width
+- Physics-informed / noise-aware training: training through Phase 17's device-noise model injected as perturbations, structurally mirroring Phase 14's adversarial-training loop
+
+## Framework-Native Training (PyTorch/JAX)
+*(Added 2026-08-09, not in the original scope — see Phase 19 in PLAN.md.
+Fully CPU-portable, actually run — PyTorch/Lightning/DeepSpeed/Ray
+installed locally, same precedent as JAX for `tpu_engine`. Every step
+cross-checks against a from-scratch implementation this repo already
+proved correct.)*
+- PyTorch port of `transformer/`, diffed against the C++ version's loss trajectory and greedy-decode correctness check
+- `torch.compile` benchmarking: real measured CPU speedup or honest non-speedup vs. eager
+- DDP over CPU (`gloo`), real multi-process ranks, diffed against `distributed_training/data_parallel`
+- FSDP vs. hand-written ZeRO: real `FullyShardedDataParallel` run plus a direct structural comparison against `zero1`/`zero2`/`zero3`
+- JAX port (`jit`/`grad`/`vmap`/simulated `pmap` via `XLA_FLAGS`) of the same model
+- One real run through a production training framework (Lightning/DeepSpeed/Ray Train), with any genuine Mac/CPU incompatibility (e.g. DeepSpeed's GPU/Linux-leaning feature set) verified empirically and documented honestly rather than assumed
 
 ## Portfolio / Career Deliverables
 - `/docs`: RFCs and ADRs for scheduler, memory model, transport protocol (written as internal Google/Meta design docs)

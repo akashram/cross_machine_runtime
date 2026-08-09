@@ -14,7 +14,9 @@ All CPU affinity, hugepages, OS tuning, SIMD, branchless, AVX-512, tiling,
 inference engine, roofline, perf counters, PGO, and busy-poll steps done.
 Lives in `cpu_engine/`.
 
-**Phase 3: GPU Backend — CODE COMPLETE (24/24 steps, 2026-07-19)**
+**Phase 3: GPU Backend — CODE COMPLETE for the original 24 steps (2026-07-19);
+steps 25-26 (Triton, CUTLASS) scoped 2026-08-09, not yet implemented — see
+"Where we are: Phases 17-19" below.**
 All steps implemented with real CUDA code: memory management, streams, warp
 and shared-memory primitives, coalescing, occupancy, elementwise/GEMM kernels,
 PTX/SASS inspection, flash attention, CUDA graphs, P2P, mixed precision, FP8,
@@ -680,6 +682,62 @@ fake test plan — its entire deliverable is a real measurement that
 needs Docker to produce honestly. Full `ctest`: 106/106 passing, zero
 regressions from any of the above.
 
+**Phases 17-19: scoped 2026-08-09, not yet started.** Added while comparing
+this repo against a batch of ~10 job descriptions for analog/physics-based
+AI compute roles (hardware architects, model architects, model-hardware
+co-design, training infra, dynamical-systems theorists, SciML solver
+engineers, analog circuit-sim engineers, PPA-modeling engineers). That
+comparison found the repo deeply covers digital accelerator architecture,
+distributed-training mechanics, compilers, and quantization/sparsity, but
+has a clean zero on: analog/physics-based computing, non-volatile memory
+devices, mixed-signal circuit modeling, PPA/dataflow accelerator-design
+tools (Timeloop/Accelergy/CACTI-style), nonlinear dynamical systems (ODE/
+SDE/PDE, stability, adjoint methods), the "unconventional" model
+architectures those roles build instead of plain transformers (SSMs,
+diffusion/flow, Neural ODEs, Deep Equilibrium Models, energy-based models,
+muP scaling), and genuine PyTorch/JAX framework fluency (this repo's whole
+training stack is hand-rolled C++ autograd). Three new phases close this,
+full sections now in PLAN.md/SCOPE.md, following the same non-negotiable
+convention as every phase above (real code, not stubs; run locally
+wherever possible; honestly hardware-gated where not; README per step with
+real measured numbers; design doc per phase):
+- **Phase 17: Analog & Unconventional Compute Hardware** (`analog_engine/`,
+  8 steps) — device non-ideality modeling, resistive-crossbar MAC
+  simulation, NVM tradeoff comparison, analog-vs-digital energy modeling, a
+  from-scratch PPA/dataflow tool (Weight-/Output-/Input-/Row-Stationary),
+  a systolic design-space sweep on `transformer/`'s real GEMM shapes, a
+  hardware-algorithm co-design case study reusing an existing repo
+  algorithm, and an analog circuit transient surrogate. Unlike Phase
+  7/8/15, there's no toolchain gate at all here — no analog/neuromorphic
+  silicon exists to rent, so every step is fully local.
+- **Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures**
+  (`sciml/`, 10 steps, the largest new phase) — ODE/SDE solver libraries
+  (verified against closed-form/Monte-Carlo ground truth), Neural ODEs
+  (adjoint-method gradients, finite-difference-verified like `adversarial/
+  input_gradients`), Deep Equilibrium Models (implicit-function-theorem
+  backprop), a state-space-model layer measured directly against
+  `transformer/`'s attention, diffusion/flow-matching and energy-based
+  generative models, a real muP hyperparameter-transfer measurement, and a
+  noise-aware training bridge into Phase 17's device-noise model. Fully
+  CPU-portable, no hardware gate.
+- **Phase 19: Framework-Native Training (PyTorch/JAX)**
+  (`framework_native/`, 6 steps) — the one gap that isn't about a new
+  topic but about tooling: this repo demonstrates the underlying concepts
+  (autograd, ZeRO-style sharding, data parallelism) entirely in hand-rolled
+  C++, which doesn't show fluency with the actual industry-standard
+  frameworks several JDs list as a minimum qualification. PyTorch and JAX
+  ports of `transformer/`, `torch.compile` benchmarking, a real multi-
+  process DDP run over CPU `gloo` diffed against `distributed_training/
+  data_parallel`, a real FSDP run structurally compared against hand-
+  written `zero1`/`zero2`/`zero3`, and one real run through a production
+  framework (Lightning/DeepSpeed/Ray Train). PyTorch + Lightning +
+  DeepSpeed + Ray approved for local install (2026-08-09), same precedent
+  as the JAX install for Phase 8.
+
+See `READING_LIST.md` for the full citation list backing all three phases
+(analog/PPA-modeling papers, SciML/unconventional-architecture papers,
+PyTorch/JAX framework references).
+
 ---
 
 ## Execution strategy (updated 2026-07-19)
@@ -715,16 +773,22 @@ hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
 measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
 and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: the hardware validation pass below.** Every phase in the
-local-implementation order (1-10, 12-16) is now code-complete — nothing
-locally-codeable remains unwritten. What's left across the entire project
-is: (a) the hardware validation pass itself (GPU/FPGA/TPU/multi-node/
-eBPF, phases 3-9 in original order), blocked on provisioning cloud
-hardware; (b) Phase 15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5
-(Docker/kubectl/cluster, none installed locally — see the pre-hardware
-TODO in project memory on the standing "no new local installs without
-asking" decision, which now also covers Docker/kubectl alongside the
-existing JAX/Java-TLC entries).
+**Next up: Phases 17-19, then the hardware validation pass below.** Every
+phase in the original local-implementation order (1-10, 12-16) is
+code-complete. Phases 17-19 (scoped 2026-08-09, see above) are the newest
+addition to that same "write all local-codeable code before hardware"
+queue — Phase 18 (SciML) and Phase 17 (analog/unconventional compute) are
+both fully CPU-portable with zero hardware gate, so they're next; Phase 19
+(framework-native training) follows once PyTorch/Lightning/DeepSpeed/Ray
+are installed. After all three are code-complete, what's left across the
+entire project is: (a) the hardware validation pass itself (GPU/FPGA/TPU/
+multi-node/eBPF, phases 3-9 in original order, plus Phase 3's new
+Triton/CUTLASS steps), blocked on provisioning cloud hardware; (b) Phase
+15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5 (Docker/kubectl/
+cluster, none installed locally — see the pre-hardware TODO in project
+memory on the standing "no new local installs without asking" decision,
+which now also covers Docker/kubectl alongside the existing JAX/Java-TLC
+entries).
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
