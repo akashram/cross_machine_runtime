@@ -43,10 +43,11 @@ consolidated under a phase instead of a step.
   structure.
 - **Phases 17-19** (added 2026-08-09, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
   close a gap found by comparing this repo against a batch of analog/
-  physics-based-AI-compute job descriptions. Implementation is in progress
-  as of 2026-08-09 (see each phase's header below for current step count);
-  steps not yet built have no in-repo doc pointer or commit — treat those
-  as pure background reading to have in hand before that code lands.
+  physics-based-AI-compute job descriptions. Phase 17 is CODE COMPLETE
+  (8/8 steps) as of 2026-08-09; Phase 18 is in progress (see its header
+  below for current step count); Phase 19 hasn't started. Steps not yet
+  built have no in-repo doc pointer or commit — treat those as pure
+  background reading to have in hand before that code lands.
 
 ---
 
@@ -492,17 +493,13 @@ still-unrun `npu_onnx_export.py` path.
 
 ---
 
-## Phase 17: Analog & Unconventional Compute Hardware — 7/8 steps built
+## Phase 17: Analog & Unconventional Compute Hardware — CODE COMPLETE (8/8 steps)
 
-**Start here:** `analog_engine/device_model/README.md`,
-`analog_engine/crossbar_mac/README.md`,
-`analog_engine/nvm_comparison/README.md`,
-`analog_engine/energy_model/README.md`,
-`analog_engine/dataflow_model/README.md`,
-`analog_engine/systolic_sweep/README.md`,
-`analog_engine/codesign_case_study/README.md` (steps 1-7, the only ones
-landed so far). Full `analog_engine/DESIGN.md` will exist once the phase
-wraps up. Scoped in `e523a33`.
+**Start here:** `analog_engine/README.md` and `analog_engine/DESIGN.md`
+(phase-level wrap-up, `21a2ba7`), then each step's own README:
+`device_model/`, `crossbar_mac/`, `nvm_comparison/`, `energy_model/`,
+`dataflow_model/`, `systolic_sweep/`, `codesign_case_study/`,
+`circuit_transient/`. Scoped in `e523a33`.
 
 - **Step 1 — Device non-ideality model** (`analog_engine/device_model/`) [`734fb5d`]: Yu, S. (2018), *"Neuro-Inspired Computing with Emerging Nonvolatile Memory"* (Proceedings of the IEEE) — the device-physics review this step's noise/drift/endurance model draws on. Real bug caught and fixed by the test: the endurance check originally re-rolled a Bernoulli stuck-probability on every write, compounding into a wildly inflated failure rate; fixed with a per-cell fixed failure-threshold percentile compared against a cumulative failure curve.
 - **Step 2 — Resistive crossbar MAC simulation** (`analog_engine/crossbar_mac/`) [`c96dc08`]: Shafiee, A. et al. (2016), *"ISAAC: A Convolutional Neural Network Accelerator with In-Situ Analog Arithmetic in Crossbars"* — the canonical resistive-crossbar-as-MAC-engine architecture this step simulates; Chi, P. et al. (2016), *"PRIME: A Novel Processing-in-Memory Architecture for Neural Network Computation in ReRAM-Based Main Memory"* — a second foundational crossbar-PIM architecture, useful contrast; Ambrogio, S. et al. (2018), *"Equivalent-accuracy accelerated neural-network training using analog memory"* (Nature) — a real measured analog-training result, useful ground-truth calibration for the accuracy-vs-noise curve. Real finding: precision (num_levels) drives MAC accuracy (23.7%->1.8% relative RMSE, 4->64 levels) but crossbar SIZE doesn't (~5-7% relative RMSE flat from 8x8->64x64) — signal and noise both scale as sqrt(M) for random weights.
@@ -511,7 +508,7 @@ wraps up. Scoped in `e523a33`.
 - **Step 5 — PPA/dataflow modeling** (`analog_engine/dataflow_model/`) [`0529c3f`]: Sze, V., Chen, Y-H., Yang, T-J. & Emer, J. (2017), *"Efficient Processing of Deep Neural Networks: A Tutorial and Survey"* — the canonical reference for the Weight-/Output-/Input-/Row-Stationary taxonomy this step implements; Parashar, A. et al. (2019), *"Timeloop: A Systematic Approach to DNN Accelerator Evaluation"* — the tool this step reproduces a minimal version of; Wu, Emer & Sze (2019), same as step 4. Real finding: Row-Stationary numerically achieves WS's minimal weight movement AND IS's minimal input movement simultaneously; misaligned M=513 drops PE utilization to 0.8016, reproducing `tpu_engine/mxu_opt`'s independently-built utilization-cliff finding.
 - **Step 6 — Systolic array design-space sweep** (`analog_engine/systolic_sweep/`) [`62a4f7e`]: Chen, Y-H., Emer, J. & Sze, V. (2016/2017), *"Eyeriss: A Spatial Architecture for Energy-Efficient Dataflow for Convolutional Neural Networks"* — the concrete Row-Stationary accelerator design this step and step 5 are modeled after; Sze et al. (2017), same as step 5. Real finding: on 7 real GEMM shapes from `transformer/`'s actual trained config, a 128x128 array averages 3.79% utilization vs. 100% at each shape's best-matched size — independently reproduces `tpu_engine/mxu_opt`'s utilization-cliff finding from the opposite sweep direction.
 - **Step 7 — Hardware-algorithm co-design case study** (`analog_engine/codesign_case_study/`) [`b64d802`]: no new citation — re-derives Phase 9 step 6's real `GptqQuantizer` (Frantar et al. 2022) under analog constraints via step 1's device model. Real finding: weight RMSE behaves exactly as physics predicts (noise always hurts, precision always helps); a real non-monotonic end-task perplexity result (analog noise very slightly IMPROVED perplexity on this overfit toy corpus) was caught by the test and led to replacing an overly strong assertion with a defensible one — analog noise's perplexity effect stays smaller than GPTQ's own quantization effect.
-- **Step 8 — Analog circuit transient surrogate**: **not yet implemented**; no dedicated citation planned — basic circuit theory (Ohm's law, Kirchhoff's current law) is the entire mathematical content needed; see the Background note below.
+- **Step 8 — Analog circuit transient surrogate** (`analog_engine/circuit_transient/`) [`3c37b70`]: no dedicated citation — basic circuit theory (Ohm's law, Kirchhoff's current law) is the entire mathematical content needed; see the Background note below. Real finding: settling time scales quadratically with crossbar size via a distributed Elmore-style RC line (256x slower for a 16x size increase) — a third, independent reason bigger crossbars aren't free, on top of step 2's statistics-based finding.
 
 **Background:** basic circuit theory (Ohm's law, Kirchhoff's current law)
 is the entire mathematical content behind "a resistive crossbar computes a
