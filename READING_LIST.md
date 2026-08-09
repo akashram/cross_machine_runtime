@@ -516,15 +516,15 @@ hasn't seen the dataflow-taxonomy material before starting step 5.
 
 ---
 
-## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — 2/10 steps built
+## Phase 18: Dynamical Systems, SciML & Physics-Informed Architectures — 3/10 steps built
 
-**Start here:** `sciml/ode_solver/README.md`, `sciml/stiffness/README.md`
-(steps 1-2, the only ones landed so far). Full `sciml/DESIGN.md` will exist
-once the phase wraps up. Scoped in `e523a33`.
+**Start here:** `sciml/ode_solver/README.md`, `sciml/stiffness/README.md`,
+`sciml/sde_solver/README.md` (steps 1-3, the only ones landed so far). Full
+`sciml/DESIGN.md` will exist once the phase wraps up. Scoped in `e523a33`.
 
 - **Step 1 — ODE solver library** (`sciml/ode_solver/`) [`7e475e8`]: no dedicated citation; see Iserles under Background below. Verified against closed-form solutions of three test ODEs (exponential decay, harmonic oscillator, logistic growth); RK4's empirical convergence order measured at 16.11x error reduction per `dt` halving (theory: 16x for a 4th-order method).
 - **Step 2 — Stability & stiffness analysis** (`sciml/stiffness/`) [`62b27a9`]: no dedicated citation; same Iserles background as step 1. Forward Euler's exact stability boundary `dt < 2/|lambda|` measured directly (bounded just below, diverges to `1.1e12` just above); Van der Pol's stiffness ratio measured to grow from complex eigenvalues (non-stiff) at mu=1 to a ~2498 real-eigenvalue ratio at mu=50, via a numerically estimated (finite-difference) Jacobian.
-- **Step 3 — SDE solver**: **not yet implemented**; Kloeden, P.E. & Platen, E. (1992), *Numerical Solution of Stochastic Differential Equations* — the standard reference for Euler-Maruyama/Milstein and their convergence-order guarantees.
+- **Step 3 — SDE solver** (`sciml/sde_solver/`) [`68dbdd8`]: Kloeden, P.E. & Platen, E. (1992), *Numerical Solution of Stochastic Differential Equations* — the standard reference for Euler-Maruyama/Milstein and their convergence-order guarantees. Empirical strong-convergence order measured almost exactly on theory (Euler-Maruyama 1.38 vs. theoretical 1.41; Milstein 2.02 vs. theoretical 2.0, both on GBM's multiplicative-noise problem); Milstein verified to reduce to Euler-Maruyama exactly (`0.00e+00` difference) on Ornstein-Uhlenbeck's additive noise, a direct structural check.
 - **Step 4 — Neural ODEs**: **not yet implemented**; Chen, R.T.Q., Rubanova, Y., Bettencourt, J. & Duvenaud, D. (2018), *"Neural Ordinary Differential Equations"* (NeurIPS, best paper) — parameterize `dx/dt` with a network, backprop via the adjoint method instead of unrolling; Pontryagin, L.S. et al. (1962), *The Mathematical Theory of Optimal Control Processes* — the classical origin of the adjoint/costate method Chen et al. repurpose, useful for understanding *why* the adjoint ODE gives the right gradient.
 - **Step 5 — Deep Equilibrium Models**: **not yet implemented**; Bai, S., Kolter, J.Z. & Koltun, V. (2019), *"Deep Equilibrium Models"* (NeurIPS) — the fixed-point-layer formulation and implicit-function-theorem backprop; Broyden, C.G. (1965), *"A Class of Methods for Solving Nonlinear Simultaneous Equations"* — the quasi-Newton fixed-point solver this step can use instead of plain fixed-point iteration.
 - **Step 6 — State-space model layer**: **not yet implemented**; Gu, A., Goel, K. & Ré, C. (2021), *"Efficiently Modeling Long Sequences with Structured State Spaces"* (S4) — the linear state-space recurrence layer this step will implement; Gu, A. & Dao, T. (2023), *"Mamba: Linear-Time Sequence Modeling with Selective State Spaces"* — the input-dependent (selective) extension, background for the writeup even if the implemented layer stays closer to plain S4.
