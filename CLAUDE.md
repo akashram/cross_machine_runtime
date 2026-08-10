@@ -85,8 +85,17 @@ also turned up a second, unrelated real bug via TSan: `BackpressureSender::stop(
 was still using the exact detach-not-join shutdown pattern `raft.cpp`
 already hit as a real SIGSEGV and fixed — `backpressure.cpp` had the
 pre-fix version with a now-stale comment pointing at raft.cpp. Fixed the
-same way (`shutdownPeer()` + `join()`). See `networking/backpressure/README.md`
-for both findings in full.
+same way (`shutdownPeer()` + `join()`). Sweeping `networking/` for the
+same detach-not-join shape (per the raft memory's own advice) found the
+shape didn't recur, but did turn up a third, differently-shaped real bug:
+`hedged_requests`' `.detach()` is intentional (hedging lets a losing
+backend keep running after the call returns), but
+`hedged_request_test.cpp` shared one mutable `std::mt19937&` across calls
+whose backend threads can legitimately overlap — a real TSan-caught race
+in the test's traffic generation, not the library. Fixed by giving each
+call its own independently-seeded generator instead of shared mutable
+state. See `networking/backpressure/README.md` and
+`networking/hedged_requests/README.md` for all three findings in full.
 
 **Phase 6: Distributed GPU Training — CODE COMPLETE (25/25 steps, 2026-07-21)**
 All 25 steps are code-complete and locally run on this Mac (`ctest`, real

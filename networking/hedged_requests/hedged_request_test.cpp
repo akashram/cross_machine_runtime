@@ -19,7 +19,23 @@ namespace {
 
 // backend0: 5ms typically, 200ms on ~8% of calls (the straggler).
 // backend1: reliably ~6ms.
-std::string flakyBackend(std::mt19937 &rng) {
+//
+// Takes a seed, not a shared std::mt19937&: hedgedCall() (hedged_request.cpp)
+// deliberately lets a "losing" backend thread keep running detached after
+// it returns -- no cancellation of stragglers, that's the point of
+// hedging -- so a straggler from call i can genuinely still be running
+// when call i+1 starts. An earlier version of this test passed a single
+// mt19937 by reference into every call's lambda; two overlapping calls'
+// threads then touched the same generator with no synchronization, a
+// real data race caught by TSan (2026-08-10), not a false positive.
+// Constructing a fresh, independently-seeded generator per call removes
+// the shared mutable state entirely -- each call's RNG lives only on its
+// own thread's stack -- while keeping the property the test actually
+// needs: seeding by call index (see main()) makes the no-hedging and
+// hedging runs draw the identical straggler pattern call-for-call, same
+// as the single-shared-seed version intended.
+std::string flakyBackend(unsigned seed) {
+  std::mt19937 rng(seed);
   std::uniform_real_distribution<double> dist(0.0, 1.0);
   int ms = (dist(rng) < 0.08) ? 200 : 5;
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
@@ -41,24 +57,26 @@ int main() {
   constexpr int kRequests = 200;
   constexpr auto kHedgeDelay = std::chrono::milliseconds(20);
 
-  // Same seed for both runs so backend0's straggler pattern is identical
-  // — isolates hedging's effect instead of comparing against different
-  // random draws.
-  std::mt19937 rngNoHedge(42), rngHedge(42);
+  // Same per-call seed (base + call index) for both runs so backend0's
+  // straggler pattern is identical — isolates hedging's effect instead of
+  // comparing against different random draws. See flakyBackend() for why
+  // this is a fresh generator per call rather than one shared mt19937.
+  constexpr unsigned kSeedBase = 42;
 
   std::vector<double> noHedgeMs, hedgeMs;
   int hedgedCount = 0;
 
   for (int i = 0; i < kRequests; ++i) {
     auto t0 = Clock::now();
-    flakyBackend(rngNoHedge); // no hedging: always just backend0
+    flakyBackend(kSeedBase + static_cast<unsigned>(i)); // no hedging: always just backend0
     noHedgeMs.push_back(std::chrono::duration<double, std::milli>(Clock::now() - t0).count());
   }
 
   for (int i = 0; i < kRequests; ++i) {
     auto t0 = Clock::now();
+    unsigned seed = kSeedBase + static_cast<unsigned>(i);
     auto result = hedging::hedgedCall(
-        {[&rngHedge] { return flakyBackend(rngHedge); }, [] { return reliableBackend(); }}, kHedgeDelay);
+        {[seed] { return flakyBackend(seed); }, [] { return reliableBackend(); }}, kHedgeDelay);
     hedgeMs.push_back(std::chrono::duration<double, std::milli>(Clock::now() - t0).count());
     if (result.wasHedged) ++hedgedCount;
   }

@@ -17,28 +17,45 @@ result is discarded; a real deployment would need the backend call itself
 to accept a deadline. `backends` are arbitrary callables, not tied to
 `networking/common::Channel`, so this composes with any blocking call.
 
-## Sanity-run output (Mac, 2026-07-19)
+**A real finding, not just a design note**: losing backends running on
+after `hedgedCall()` returns (see above) means a straggler from call `i`
+can genuinely still be executing when call `i+1` starts. An early version
+of `hedged_request_test.cpp` passed a single `std::mt19937&` by reference
+into every call's backend lambda — two overlapping calls' threads then
+touched that one generator with no synchronization, a real data race
+caught by TSan (2026-08-10), not a false positive. Fixed by giving each
+call its own independently-seeded generator (seed = base + call index)
+instead: no shared mutable state to race on, while still giving the
+no-hedging and hedging runs the identical straggler pattern call-for-call
+that isolating hedging's effect depends on. `hedged_request.cpp` itself
+needed no change — the race was in the test's traffic generation, not the
+library.
+
+## Sanity-run output (Mac, 2026-08-10)
 
 `hedged_request_test`: a flaky backend (5ms typically, 200ms straggler on
 ~8% of calls) raced against a reliable ~6ms backend, 200 requests each,
-compared against the same flaky backend alone (same RNG seed, so both
-runs see an identical straggler pattern — isolates hedging's effect from
-run-to-run noise):
+compared against the same flaky backend alone (same per-call seed
+sequence, so both runs see an identical straggler pattern — isolates
+hedging's effect from run-to-run noise):
 
 ```
                p50 (ms)   p99 (ms)
-no hedging         6.40     205.18
-hedged             6.55      33.04
-hedged on 14/200 requests (~7% straggler rate observed)
+no hedging         5.12     202.44
+hedged             5.25      29.41
+hedged on 7/200 requests (~4% straggler rate observed)
 PASS
 ```
 
-p99 drops from 205ms to 33ms (straggler calls get rescued by the reliable
-backend ~20ms in, instead of running the full 200ms) while p50 barely
-moves (6.40ms → 6.55ms) — most calls never hedge at all, since the
-primary backend answers well within `hedgeDelay` the other ~93% of the
+p99 drops from ~202ms to ~29ms (straggler calls get rescued by the
+reliable backend ~20ms in, instead of running the full 200ms) while p50
+barely moves (5.12ms → 5.25ms) — most calls never hedge at all, since the
+primary backend answers well within `hedgeDelay` the other ~96% of the
 time. This is the whole point of hedging: it buys back tail latency
-almost for free in the common case.
+almost for free in the common case. (Straggler rate observed dropped from
+the earlier ~7% to ~4% purely because per-call seeding draws a different,
+still-deterministic sequence than the old single shared generator did —
+not a behavior change in the code being tested.)
 
 ## Results
 This step's real result is the sanity-run above — the tradeoff (tail
@@ -47,4 +64,5 @@ real network hardware, only the absolute numbers. No hardware-gated
 Results table.
 
 ## Hardware notes
-- Builds and runs anywhere (validated on Mac); no hardware dependency at all.
+- Builds and runs anywhere (validated on Mac, including 3 clean runs
+  under TSan); no hardware dependency at all.
