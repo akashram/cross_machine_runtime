@@ -72,6 +72,21 @@ chunk-ownership off-by-one, two shutdown-coordination deadlocks). The
 remaining 13 steps are real, complete code gated behind Linux-only kernel
 APIs, a specific NIC, external libraries, GPU hardware, or a Java
 toolchain for TLC — see `networking/README.md`'s status table.
+**Update 2026-08-10:** a full-suite `ctest` run caught `backpressure_test`
+flaking under concurrent system load (queue depth briefly exceeded its
+slack-based assertion). Root cause was structural, not a bad constant —
+the original PAUSE/RESUME design was a threshold-crossing signal with no
+hard bound on overshoot under real scheduling delay — so rather than
+widen the slack, `backpressure.{h,cpp}` was redesigned around credit-based
+flow control (`acquireCredit()`/`grantCredit()`), the same technique
+TCP/HTTP2/gRPC flow control use, giving `max_in_flight <= windowSize` by
+construction; verified under 4-core CPU saturation and TSan. That work
+also turned up a second, unrelated real bug via TSan: `BackpressureSender::stop()`
+was still using the exact detach-not-join shutdown pattern `raft.cpp`
+already hit as a real SIGSEGV and fixed — `backpressure.cpp` had the
+pre-fix version with a now-stale comment pointing at raft.cpp. Fixed the
+same way (`shutdownPeer()` + `join()`). See `networking/backpressure/README.md`
+for both findings in full.
 
 **Phase 6: Distributed GPU Training — CODE COMPLETE (25/25 steps, 2026-07-21)**
 All 25 steps are code-complete and locally run on this Mac (`ctest`, real

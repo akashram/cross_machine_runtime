@@ -39,56 +39,91 @@ private:
   std::chrono::steady_clock::time_point lastRefill_;
 };
 
-// Explicit backpressure over a Channel: the receiving side monitors its
-// own queue depth and sends single-byte PAUSE/RESUME control frames back
-// to the sender when crossing high/low watermarks; the sending side
-// checks a local flag (kept current by a background listener thread)
-// before every send. This is the "explicit backpressure signals between
-// nodes" PLAN.md step 21 describes, as opposed to TokenBucket's
-// self-contained local rate limiting — the two compose (a sender can rate
-// limit locally *and* honor a remote PAUSE).
+// Explicit backpressure over a Channel: credit-based flow control, not a
+// threshold-crossing PAUSE/RESUME signal. The sender starts with
+// `windowSize` credits; every send consumes one; the receiver grants
+// exactly one credit back per data unit it actually finishes *processing*
+// (not per unit merely received — credit tracks drain capacity, not
+// arrival). This is the "explicit backpressure signals between nodes"
+// PLAN.md step 21 describes, as opposed to TokenBucket's self-contained
+// local rate limiting — the two compose (a sender can rate limit locally
+// *and* be credit-limited by a remote receiver).
+//
+// Why credit-based and not threshold-crossing PAUSE/RESUME (the original
+// design here): a PAUSE sent when queue depth crosses a high watermark
+// only takes effect once it propagates and the sender notices — under
+// real scheduling delay (worse under concurrent system load), the sender
+// can keep sending for that entire window, so queue depth overshoot is
+// bounded only by (send_rate - drain_rate) * signal_delay, which has no
+// fixed ceiling. That surfaced as a real, reproducible flaky test
+// (documented in README.md's "real finding") — not fixable by widening a
+// slack constant, since the underlying quantity it was bounding is
+// genuinely unbounded.
+//
+// Credit-based flow control has no such gap: acquireCredit() physically
+// cannot let the sender put more than `windowSize` units in flight
+// without a grant, so max_in_flight <= windowSize is true by
+// construction — independent of scheduling delay, exactly the property
+// TCP's own receive window, HTTP/2's flow-control window, and gRPC's
+// per-stream window all rely on for the same reason.
 class BackpressureSender {
 public:
-  BackpressureSender(netcommon::Channel &channel, int peer);
+  BackpressureSender(netcommon::Channel &channel, int peer, size_t windowSize);
   ~BackpressureSender();
 
-  void start(); // spawns the control-frame listener
+  void start(); // spawns the credit-grant listener
+
+  // Shuts down the read side of `channel_` for `peer` (forcibly
+  // unblocking listenLoop()'s in-flight or next recv()) and joins the
+  // listener thread -- not detach. See raft.cpp's stop() for the
+  // motivating bug (RaftNode::stop() used to detach its receiver
+  // threads, reasoning each was "just blocked in recv() forever"; that
+  // reasoning has a hole once the owning object can be destructed while
+  // a detached thread is still touching it, confirmed via a real
+  // SIGSEGV under CPU contention). The original version of this class
+  // had the exact same detach-based bug -- caught here by TSan under
+  // concurrent load (2026-08-10), not by inspection -- fixed the same
+  // way: shutdownPeer() then join(), so by the time stop() returns the
+  // listener thread has genuinely exited and channel_ can be safely
+  // destroyed.
   void stop();
 
-  // True if the peer's last signal was PAUSE (or no signal received yet
-  // — starts unpaused). Callers should check this before sending data
-  // frames on the same channel; this class doesn't intercept data frames
-  // itself since the data protocol is application-specific.
-  bool isPaused() const { return paused_.load(std::memory_order_relaxed); }
+  // Blocks (busy-polls) until at least one credit is available, then
+  // consumes it. Call immediately before sending each data unit — this
+  // is what gives the hard in-flight bound described above.
+  void acquireCredit();
+
+  // Number of acquireCredit() calls that actually had to wait for a
+  // grant (as opposed to a credit already being available). Used by
+  // callers/tests to confirm backpressure genuinely engaged, not just
+  // "the sender happened to be slow enough on its own."
+  size_t blockedCount() const { return blockedCount_.load(std::memory_order_relaxed); }
 
 private:
-  void listenLoop();
+  void listenLoop(); // increments credits_ on every 1-byte grant received
 
   netcommon::Channel &channel_;
   int peer_;
-  std::atomic<bool> paused_{false};
+  std::atomic<size_t> credits_;
+  std::atomic<size_t> blockedCount_{0};
   std::atomic<bool> running_{false};
   std::thread listenThread_;
 };
 
 class BackpressureReceiver {
 public:
-  // `highWatermark`/`lowWatermark` are queue-depth thresholds: crossing
-  // high (while not already paused) sends PAUSE; dropping to/below low
-  // (while paused) sends RESUME. Hysteresis (two thresholds, not one)
-  // avoids rapidly toggling PAUSE/RESUME when depth oscillates around a
-  // single value.
-  BackpressureReceiver(netcommon::Channel &channel, int peer, size_t highWatermark, size_t lowWatermark);
+  BackpressureReceiver(netcommon::Channel &channel, int peer);
 
-  // Call whenever the receiver's queue depth changes; sends a control
-  // frame if a threshold was crossed.
-  void reportQueueDepth(size_t depth);
+  // Call after finishing (draining/processing) one data unit — grants
+  // exactly one credit back to the sender. Granting on *drain* rather
+  // than on *arrival* is what couples the sender's rate to the
+  // receiver's real processing capacity instead of its buffering
+  // capacity.
+  void grantCredit();
 
 private:
   netcommon::Channel &channel_;
   int peer_;
-  size_t highWatermark_, lowWatermark_;
-  bool currentlyPaused_ = false;
   std::mutex sendMu_;
 };
 

@@ -40,13 +40,8 @@ double TokenBucket::available() const {
   return tokens_;
 }
 
-namespace {
-constexpr uint8_t kResume = 0;
-constexpr uint8_t kPause = 1;
-} // namespace
-
-BackpressureSender::BackpressureSender(netcommon::Channel &channel, int peer)
-    : channel_(channel), peer_(peer) {}
+BackpressureSender::BackpressureSender(netcommon::Channel &channel, int peer, size_t windowSize)
+    : channel_(channel), peer_(peer), credits_(windowSize) {}
 
 BackpressureSender::~BackpressureSender() { stop(); }
 
@@ -57,36 +52,42 @@ void BackpressureSender::start() {
 
 void BackpressureSender::stop() {
   if (!running_.exchange(false)) return;
-  if (listenThread_.joinable()) listenThread_.detach(); // see raft.cpp's stop() for why detach, not join
+  channel_.shutdownPeer(peer_); // unblocks listenLoop()'s recv(), see backpressure.h
+  if (listenThread_.joinable()) listenThread_.join();
 }
 
 void BackpressureSender::listenLoop() {
   while (running_.load(std::memory_order_relaxed)) {
-    uint8_t signal;
+    uint8_t grant;
     try {
-      channel_.recv(peer_, &signal, 1);
+      channel_.recv(peer_, &grant, 1);
     } catch (...) {
       return;
     }
-    paused_.store(signal == kPause, std::memory_order_relaxed);
+    credits_.fetch_add(1, std::memory_order_relaxed);
   }
 }
 
-BackpressureReceiver::BackpressureReceiver(netcommon::Channel &channel, int peer, size_t highWatermark,
-                                             size_t lowWatermark)
-    : channel_(channel), peer_(peer), highWatermark_(highWatermark), lowWatermark_(lowWatermark) {}
-
-void BackpressureReceiver::reportQueueDepth(size_t depth) {
-  std::lock_guard<std::mutex> lock(sendMu_);
-  if (!currentlyPaused_ && depth >= highWatermark_) {
-    currentlyPaused_ = true;
-    uint8_t signal = kPause;
-    channel_.send(peer_, &signal, 1);
-  } else if (currentlyPaused_ && depth <= lowWatermark_) {
-    currentlyPaused_ = false;
-    uint8_t signal = kResume;
-    channel_.send(peer_, &signal, 1);
+void BackpressureSender::acquireCredit() {
+  bool waited = false;
+  while (true) {
+    size_t cur = credits_.load(std::memory_order_relaxed);
+    if (cur > 0 && credits_.compare_exchange_weak(cur, cur - 1, std::memory_order_relaxed)) {
+      if (waited) blockedCount_.fetch_add(1, std::memory_order_relaxed);
+      return;
+    }
+    waited = true;
+    std::this_thread::sleep_for(std::chrono::microseconds(50));
   }
+}
+
+BackpressureReceiver::BackpressureReceiver(netcommon::Channel &channel, int peer)
+    : channel_(channel), peer_(peer) {}
+
+void BackpressureReceiver::grantCredit() {
+  std::lock_guard<std::mutex> lock(sendMu_);
+  uint8_t grant = 1;
+  channel_.send(peer_, &grant, 1);
 }
 
 } // namespace backpressure

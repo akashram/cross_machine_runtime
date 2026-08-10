@@ -1,11 +1,15 @@
 // backpressure_test.cpp — two parts:
 // (1) TokenBucket: deterministic capacity/refill check, no networking.
 // (2) BackpressureSender/Receiver: rank0 floods rank1 with data as fast
-//     as possible; rank1 processes slowly (simulated) and reports queue
-//     depth after every change. Verifies (a) no data loss, (b) queue
-//     depth never blows up past a small margin over the high watermark,
-//     (c) PAUSE and RESUME both actually fired — proving backpressure
-//     engaged, not just "the sender happened to be slow enough anyway."
+//     as credits allow; rank1 processes slowly (simulated) and grants a
+//     credit back per unit actually drained. Verifies (a) no data loss,
+//     (b) queue depth NEVER exceeds the credit window — a hard bound,
+//     true by construction, not an empirically-tuned slack margin (see
+//     backpressure.h for why credit-based flow control gives that
+//     guarantee where the original threshold-crossing PAUSE/RESUME
+//     design could not), (c) the sender actually blocked waiting for
+//     credit at least once — proving backpressure engaged, not just "the
+//     sender happened to be slow enough anyway."
 
 #include "backpressure.h"
 
@@ -32,39 +36,36 @@ bool testTokenBucket() {
 }
 
 bool testBackpressureSignaling() {
-  constexpr size_t kHigh = 20, kLow = 5;
+  constexpr size_t kWindow = 20;
   constexpr int kPacketCount = 500;
 
   auto channels = netcommon::make_tcp_loopback_mesh(2, 35901);
-  backpressure::BackpressureSender sender(*channels[0], /*peer=*/1);
-  backpressure::BackpressureReceiver receiver(*channels[1], /*peer=*/0, kHigh, kLow);
+  backpressure::BackpressureSender sender(*channels[0], /*peer=*/1, kWindow);
+  backpressure::BackpressureReceiver receiver(*channels[1], /*peer=*/0);
   sender.start();
 
   std::atomic<size_t> queueDepth{0};
   std::atomic<size_t> maxQueueDepthSeen{0};
-  std::atomic<int> pauseCount{0}, resumeCount{0};
-  std::atomic<bool> receiverDone{false};
 
   // Receiver: reads packets, enqueues, and a slow "worker" drains them —
-  // simulating a receiver that can't keep up, which is what should
-  // trigger PAUSE.
+  // simulating a receiver that can't keep up. Credit is granted only on
+  // drain (grantCredit(), in workerThread below), not on arrival here —
+  // that's what couples the sender's rate to real processing capacity.
   std::thread receiverThread([&] {
     for (int i = 0; i < kPacketCount; ++i) {
       uint8_t byte;
       channels[1]->recv(0, &byte, 1);
       size_t depth = queueDepth.fetch_add(1) + 1;
       maxQueueDepthSeen = std::max(maxQueueDepthSeen.load(), depth);
-      receiver.reportQueueDepth(depth);
     }
-    receiverDone = true;
   });
   std::thread workerThread([&] {
     int processed = 0;
     while (processed < kPacketCount) {
       if (queueDepth.load() > 0) {
         std::this_thread::sleep_for(std::chrono::microseconds(200)); // slow processing
-        size_t depth = queueDepth.fetch_sub(1) - 1;
-        receiver.reportQueueDepth(depth);
+        queueDepth.fetch_sub(1);
+        receiver.grantCredit();
         ++processed;
       } else {
         std::this_thread::sleep_for(std::chrono::microseconds(50));
@@ -72,25 +73,12 @@ bool testBackpressureSignaling() {
     }
   });
 
-  // Sender: rate-limited locally by a TokenBucket *and* honoring the
-  // receiver's PAUSE/RESUME — the composition documented in
-  // backpressure.h. Without the local rate limit, a first version of
-  // this test showed queue depth blowing past 50 on a 20-item high
-  // watermark: TCP buffers far more than a few dozen 1-byte messages at
-  // every layer (send buffer, network, receive buffer), so PAUSE alone,
-  // reacting only after the receiver notices, cannot bound how much is
-  // already in flight by the time it takes effect. A bounded sender rate
-  // is what keeps that in-flight backlog small enough for PAUSE to
-  // actually matter — the real lesson of this step, not a test bug.
-  backpressure::TokenBucket sendRate(/*capacity=*/8, /*refill_per_sec=*/20000); // ~4x the receiver's drain rate
-  bool wasPaused = false;
+  // Sender: no local TokenBucket needed here — acquireCredit() IS the
+  // rate limit now, and unlike TokenBucket's locally-guessed multiple of
+  // the receiver's drain rate, it's mechanically coupled to the
+  // receiver's actual drain rate (grantCredit() only fires on drain).
   for (int i = 0; i < kPacketCount; ++i) {
-    while (sender.isPaused()) {
-      if (!wasPaused) { ++pauseCount; wasPaused = true; }
-      std::this_thread::sleep_for(std::chrono::microseconds(100));
-    }
-    if (wasPaused) { ++resumeCount; wasPaused = false; }
-    while (!sendRate.tryAcquire(1)) std::this_thread::sleep_for(std::chrono::microseconds(50));
+    sender.acquireCredit();
     uint8_t byte = 0x42;
     channels[0]->send(1, &byte, 1);
   }
@@ -98,12 +86,15 @@ bool testBackpressureSignaling() {
   receiverThread.join();
   workerThread.join();
 
-  bool noOverflow = maxQueueDepthSeen.load() <= kHigh + 5; // small slack for in-flight signal propagation
-  bool signalingEngaged = pauseCount.load() >= 1 && resumeCount.load() >= 1;
-  bool ok = noOverflow && signalingEngaged;
+  // Hard bound, true by construction (see backpressure.h): acquireCredit()
+  // cannot let more than kWindow units be sent-but-undrained at once,
+  // regardless of scheduling delay — no slack constant needed.
+  bool noOverflow = maxQueueDepthSeen.load() <= kWindow;
+  bool backpressureEngaged = sender.blockedCount() >= 1;
+  bool ok = noOverflow && backpressureEngaged;
 
-  std::printf("Backpressure: max queue depth seen = %zu (high watermark=%zu), pauses=%d, resumes=%d: %s\n",
-              maxQueueDepthSeen.load(), kHigh, pauseCount.load(), resumeCount.load(), ok ? "PASS" : "FAIL");
+  std::printf("Backpressure: max queue depth seen = %zu (window=%zu), sender blocked %zu times: %s\n",
+              maxQueueDepthSeen.load(), kWindow, sender.blockedCount(), ok ? "PASS" : "FAIL");
   return ok;
 }
 
