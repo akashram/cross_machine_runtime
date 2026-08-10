@@ -33,3 +33,8 @@ add_subdirectory(roofline)        # Step 21
 add_subdirectory(mps)             # Step 22
 add_subdirectory(power)           # Step 23
 add_subdirectory(nsight_ci)       # Step 24
+add_subdirectory(cutlass_gemm)    # Step 26
+
+# Step 25 (Triton kernels) is not a CMake target: Triton is Python-only
+# (pip install torch triton), same non-CMake precedent as framework_native/'s
+# PyTorch/JAX steps. See gpu_engine/triton_kernels/README.md.

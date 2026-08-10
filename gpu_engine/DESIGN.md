@@ -222,6 +222,43 @@ compiled on Mac.
 | Steps 11–15 | Lambda A10 or A100 | sm_86 or sm_80 | Flash Attention, BF16, larger memory |
 | Steps 16–19 | Lambda H100 | sm_90 | TMA, WGMMA, FP8 — Hopper-only hardware |
 | Steps 20–24 | A100 | sm_80 | cusparseLt 2:4 supported, roofline, MPS |
+| Step 25 (Triton) | Same as steps 1–10 | T4 or A10/A100 | No new hardware requirement — Triton targets the same NVPTX backend as the CUDA kernels it reimplements |
+| Step 26 (CUTLASS) | A100 | sm_80 | Matches step 9's WMMA/step 19's WGMMA comparison points |
 
 Terminate after each session. Lambda charges per minute. A T4 session
 (compile + profile + terminate) costs roughly $1–2. An H100 session is ~$3–4.
+
+---
+
+## 7. Steps 25–26 (added 2026-08-09): Triton + CUTLASS
+
+Scoped after steps 1–24 were already code-complete, per the same job-
+description gap analysis that produced Phases 17–19 (see CLAUDE.md) —
+several GPU-kernel-engineering roles list Triton and/or CUTLASS fluency
+specifically, on top of raw CUDA. Both steps reimplement work already done
+by hand in steps 8/9/19 (elementwise ops, GEMM, WGMMA) using a
+higher-level tool, so each step's deliverable is a *comparison*, not new
+functionality — the interesting content is in each step's own README's
+"what does the higher-level tool abstract away, and at what cost" table,
+not in this section. Two points worth stating at the phase level:
+
+**Both steps sit at a different altitude than steps 1–24, on purpose.**
+Steps 1-24 are "how do you write a correct, fast CUDA kernel by hand."
+Steps 25-26 are "what do you get, and what do you give up, when a
+compiler (Triton) or a template library (CUTLASS) writes the kernel body
+for you." That framing is why both steps keep the hand-written kernels
+they're compared against (`kernels/gemm.cuh`, `hopper/wgmma.cuh`) as the
+baseline rather than replacing them — this repo's position is that
+understanding the hand-written path is what makes the higher-level tool's
+tradeoffs legible in the first place, not that the higher-level tool
+supersedes it.
+
+**Neither step needed new hardware provisioning to write.** Step 25 is
+pure Python (`pip install torch triton`, same non-CMake precedent as
+`framework_native/`); step 26 pulls CUTLASS's headers via `FetchContent`
+at CMake configure time. Both are unrun for the same reason every other
+`gpu_engine/` step past #1 is unrun — no CUDA-capable GPU on this Mac —
+not because of any new toolchain gate. Once cloud GPU hardware is
+provisioned for the Phase 3 hardware-validation pass, steps 25-26 run
+alongside steps 1-24 in the same session rather than needing a separate
+one.
