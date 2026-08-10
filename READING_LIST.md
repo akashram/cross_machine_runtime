@@ -157,8 +157,8 @@ hardware (no CUDA toolchain on Mac) — every README's `## Results` is
 - **Step 22 — CUDA MPS setup** (`mps/`) [`91d851c`]: no dedicated citation.
 - **Step 23 — NVML power monitoring** (`power/`) [`91d851c`]: no dedicated citation.
 - **Step 24 — Nsight integration in CI** (`nsight_ci/`) [`91d851c`]: no dedicated citation.
-- **Step 25 — Triton kernels** (added 2026-08-09): **not yet implemented** (scoped in `e523a33`); no dedicated citation once built — see Triton language docs under Vendor docs.
-- **Step 26 — CUTLASS GEMM** (added 2026-08-09): **not yet implemented** (scoped in `e523a33`); no dedicated citation once built — see CUTLASS docs under Vendor docs.
+- **Step 25 — Triton kernels** (`triton_kernels/`) (added 2026-08-09) [`6916f6f`]: no dedicated citation; see Triton language docs under Vendor docs.
+- **Step 26 — CUTLASS GEMM** (`cutlass_gemm/`) (added 2026-08-09) [`408a820`]: no dedicated citation; see CUTLASS docs under Vendor docs.
 
 Steps 6-24 all landed in one commit, `91d851c` ("Implement Phase 3 GPU
 backend steps 6–24, all stubs → full CUDA code"), which replaced the
