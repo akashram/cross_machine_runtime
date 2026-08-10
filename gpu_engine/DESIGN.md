@@ -153,6 +153,8 @@ gpu_engine/
   mps/                        ← Step 22: MPS server setup, context-switch overhead
   power/                      ← Step 23: NVML power monitoring, thermal throttling
   ci/                         ← Step 24: ncu --set full in CI pipeline
+  triton_kernels/             ← Step 25: Triton reimplementation of elementwise + GEMM
+  cutlass_gemm/                ← Step 26: CUTLASS-template GEMM instance
   test/
   bench/
 ```

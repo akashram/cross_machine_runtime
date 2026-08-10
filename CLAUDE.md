@@ -14,16 +14,31 @@ All CPU affinity, hugepages, OS tuning, SIMD, branchless, AVX-512, tiling,
 inference engine, roofline, perf counters, PGO, and busy-poll steps done.
 Lives in `cpu_engine/`.
 
-**Phase 3: GPU Backend — CODE COMPLETE for the original 24 steps (2026-07-19);
-steps 25-26 (Triton, CUTLASS) scoped 2026-08-09, not yet implemented — see
-"Where we are: Phases 17-19" below.**
+**Phase 3: GPU Backend — CODE COMPLETE (26/26 steps, 2026-08-10)**
 All steps implemented with real CUDA code: memory management, streams, warp
 and shared-memory primitives, coalescing, occupancy, elementwise/GEMM kernels,
 PTX/SASS inspection, flash attention, CUDA graphs, P2P, mixed precision, FP8,
 tensor core alignment, Hopper TMA/WGMMA, 2:4 sparsity, roofline, MPS, NVML
-power monitoring, Nsight CI. Lives in `gpu_engine/`. None of it has run on a
-GPU yet — no CUDA toolchain on Mac. All README.md result tables are still
-`TODO: run on [hardware]`. Hardware validation is deferred (see below).
+power monitoring, Nsight CI. Lives in `gpu_engine/`. Steps 25-26, scoped
+2026-08-09 (see "Where we are: Phases 17-19" below), landed 2026-08-10:
+**step 25 (Triton kernels)** reimplements step 8/9's elementwise ops + GEMM
+in Triton (`gpu_engine/triton_kernels/`, Python-only, no CMake target — same
+non-CMake precedent as `framework_native/`), with a written comparison of
+what the block-level programming model (`tl.program_id`/`tl.arange`
+indexing, `tl.dot`'s automatic Tensor Core routing, compiler-managed
+pipelining) abstracts away vs. the hand-written thread/warp-level control in
+steps 4-10 — and what it doesn't (numerical-stability tricks, the alignment
+cliff, the tile-size search `triton.autotune` automates but doesn't
+eliminate). **Step 26 (CUTLASS GEMM)** instantiates a CUTLASS SM80 TensorOp
+GEMM (`gpu_engine/cutlass_gemm/`, CUTLASS pulled via `FetchContent` — the
+repo's first use of it, since CUTLASS is header-only with no distro
+package), with a written comparison against step 9's hand-written
+`gemm_wmma` and step 19's hand-written WGMMA kernel (comparison-only for the
+WGMMA side — no H100 to compile CUTLASS's SM90 collective-builder path
+against, sketched and commented out rather than guessed-and-left-active).
+None of Phase 3 has run on a GPU yet — no CUDA toolchain on Mac. All
+README.md result tables are still `TODO: run on [hardware]`. Hardware
+validation is deferred (see below).
 
 **Phase 4: Compiler/IR (MLIR) — CODE COMPLETE (15/15 steps, 2026-07-19)**
 Runtime dialect (15 ops, 3 attrs, TableGen-based) plus all nine passes:
@@ -879,24 +894,22 @@ hardware + toolchain) left hardware-gated; Phase 16 has step 2 (cgroup
 measurement, needs Docker), step 3 (GPU passthrough, needs GPU+Docker),
 and steps 4-5 (needs a real Kubernetes cluster) left tool/cluster-gated.
 
-**Next up: Phase 3 steps 25-26 (Triton, CUTLASS), then the hardware
-validation pass below.** Every phase in the original local-implementation
-order (1-10, 12-16) is code-complete, and Phases 17, 18, and 19 (all
-scoped/completed 2026-08-09) joined them as fully code-complete the same
-day. The only remaining locally-codeable work in the entire project is
-Phase 3's two new steps (Triton kernel port, CUTLASS GEMM instance — both
-hardware-gated/unrun like the rest of Phase 3, written code + comparison
-analysis only). Once those land, the full `ctest` suite runs once as a
-checkpoint (per standing instruction: deferred until both Phase 19 and
-Phase 3 steps 25-26 are done), and everything left across the entire
-project is hardware/toolchain validation: (a) the hardware validation
-pass itself (GPU/FPGA/TPU/multi-node/eBPF, phases 3-9 in original order,
-plus Phase 3's new Triton/CUTLASS steps), blocked on provisioning cloud
-hardware; (b) Phase 15 step 1 (NPU/ANE hardware); (c) Phase 16 steps 2-5
-(Docker/kubectl/cluster, none installed locally — see the pre-hardware
-TODO in project memory on the standing "no new local installs without
-asking" decision, which now also covers Docker/kubectl alongside the
-existing JAX/Java-TLC entries).
+**Every phase's locally-codeable work is now done (2026-08-10).** Phase 3
+steps 25-26 (Triton kernels, CUTLASS GEMM) landed 2026-08-10, closing the
+last item in the entire project that could be written without cloud
+hardware. Every phase in the original local-implementation order (1-10,
+12-16) is code-complete, Phases 17-19 (scoped/completed 2026-08-09) joined
+them, and now Phase 3 is fully 26/26. The deferred full `ctest` checkpoint
+(per standing instruction: deferred until both Phase 19 and Phase 3 steps
+25-26 were done) ran the same day — see its own status note below.
+Everything left across the entire project is hardware/toolchain
+validation: (a) the hardware validation pass itself (GPU/FPGA/TPU/
+multi-node/eBPF, phases 3-9 in original order, including Phase 3's Triton/
+CUTLASS steps), blocked on provisioning cloud hardware; (b) Phase 15 step 1
+(NPU/ANE hardware); (c) Phase 16 steps 2-5 (Docker/kubectl/cluster, none
+installed locally — see the pre-hardware TODO in project memory on the
+standing "no new local installs without asking" decision, which now also
+covers Docker/kubectl alongside the existing JAX/Java-TLC entries).
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
