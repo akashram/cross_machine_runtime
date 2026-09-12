@@ -419,6 +419,23 @@ proved correct.)*
 - JAX port (`jit`/`grad`/`vmap`/simulated `pmap` via `XLA_FLAGS`) of the same model
 - One real run through a production training framework (Lightning/DeepSpeed/Ray Train), with any genuine Mac/CPU incompatibility (e.g. DeepSpeed's GPU/Linux-leaning feature set) verified empirically and documented honestly rather than assumed
 
+## Quantum Computing & Hybrid Quantum-Classical Compute
+*(Added 2026-09-12, not in the original scope — see Phase 20 in PLAN.md.
+No quantum hardware exists locally, but small-qubit-count classical
+simulation is exact, not approximate, so most of this phase is real and
+run locally; real cloud QPU access — IBM Quantum, AWS Braket, Azure
+Quantum, Xanadu Cloud — is the eventual hardware-validation step.)*
+- Hand-rolled state-vector simulator: gate application, measurement, verified against known circuit identities (Bell/GHZ/teleportation) and unitarity
+- Canonical algorithms (Deutsch-Jozsa, Grover, QFT) checked against brute-force ground truth, same "checkable structural claim" pattern as `adversarial/pgd`
+- Noise/decoherence channel model, structurally mirroring `analog_engine/device_model`'s noise-injection pattern
+- Minimal quantum error correction (repetition code / Shor code) demonstrated against the noise model
+- VQE: parameterized circuit + classical optimizer (reusing `ml/`'s optimizers), ground-state energy checked against exact diagonalization
+- QAOA on MaxCut, with an honest comparison against a classical baseline rather than an assumed quantum-advantage narrative
+- PennyLane framework-native reimplementation of VQE/QAOA (ask before installing), compared directly against the hand-rolled version — Xanadu's own library, same framework-fluency shape as Phase 19's PyTorch/JAX steps
+- Continuous-variable/photonic primitives (qumodes, Gaussian states, squeezing, homodyne measurement, Gaussian Boson Sampling) — Xanadu's specific hardware approach, not just "qubits but optical"
+- QPU backend registered in the runtime's device-dispatch pattern (`available=false`, honest reason string), the same shape as Phase 15's NPU registration — the literal "cross-machine runtime hits a genuinely different backend" plumbing
+- Cloud QPU provider landscape + cost/qubit-count/error-rate comparison, grounded in current published hardware specs
+
 ## Portfolio / Career Deliverables
 - `/docs`: RFCs and ADRs for scheduler, memory model, transport protocol (written as internal Google/Meta design docs)
 - Technical blog post per major component

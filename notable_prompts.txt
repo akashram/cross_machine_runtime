@@ -1,0 +1,5 @@
+NOTABLE PROMPTS
+================
+Prompts of yours worth keeping, appended as they happen. Each entry: the
+prompt, verbatim, plus a max-40-word note on why it was notable.
+

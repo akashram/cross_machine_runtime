@@ -45,6 +45,10 @@ consolidated under a phase instead of a step.
   close a gap found by comparing this repo against a batch of analog/
   physics-based-AI-compute job descriptions. All three are now CODE
   COMPLETE (8/8, 10/10, 6/6 steps) as of 2026-08-09.
+- **Phase 20** (added 2026-09-12, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
+  closes a separate gap this repo had a clean zero on: quantum computing.
+  Scoped, not yet implemented — see its section below for planned
+  citations ahead of any commits.
 
 ---
 
@@ -569,6 +573,32 @@ not new theory.
 
 ---
 
+## Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — SCOPED, not yet implemented
+
+**Start here:** no `quantum_engine/README.md`/`DESIGN.md` exist yet —
+this section documents the citations behind each planned step, to be
+matched against real commits once implementation starts. Scoped
+2026-09-12 (no commit hash yet).
+
+- **Step 1 — State-vector simulator fundamentals** (`quantum_engine/statevector/`) — not yet implemented: Nielsen, M.A. & Chuang, I.L. (2010), *Quantum Computation and Quantum Information* — the standard reference for the qubit/gate/measurement formalism this step implements directly.
+- **Step 2 — Canonical algorithms** (`quantum_engine/algorithms/`) — not yet implemented: Deutsch, D. & Jozsa, R. (1992), *"Rapid solution of problems by quantum computation"*; Grover, L.K. (1996), *"A fast quantum mechanical algorithm for database search"*; Shor, P.W. (1997), *"Polynomial-Time Algorithms for Prime Factorization and Discrete Logarithms on a Quantum Computer"* — background/context only, not implemented at this step's scale (Shor's algorithm needs far more qubits than local simulation supports meaningfully).
+- **Step 3 — Noise/decoherence channel model** (`quantum_engine/noise_model/`) — not yet implemented: Nielsen & Chuang (2010), same as step 1, ch. 8 (quantum operations/noise channels); Preskill, J. (2018), *"Quantum Computing in the NISQ era and beyond"* — the NISQ framing this step's noise realism is motivated by.
+- **Step 4 — Minimal quantum error correction** (`quantum_engine/error_correction/`) — not yet implemented: Nielsen & Chuang (2010), ch. 10 (quantum error correction) — the repetition-code/Shor-code formalism this step implements a minimal instance of.
+- **Step 5 — VQE** (`quantum_engine/vqe/`) — not yet implemented: Peruzzo, A. et al. (2014), *"A variational eigenvalue solver on a photonic quantum processor"* — the original VQE paper, notably demonstrated on photonic hardware, a direct link to step 8's CV work.
+- **Step 6 — QAOA** (`quantum_engine/qaoa/`) — not yet implemented: Farhi, E., Goldstone, J. & Gutmann, S. (2014), *"A Quantum Approximate Optimization Algorithm"* — the algorithm this step implements against MaxCut.
+- **Step 7 — PennyLane framework-native step** (`quantum_engine/pennylane_vqe_qaoa/`) — not yet implemented: Bergholm, V. et al. (2018/2022), *"PennyLane: Automatic differentiation of hybrid quantum-classical computations"* — Xanadu's own library, the direct framework-fluency counterpart to Phase 19's PyTorch/JAX steps.
+- **Step 8 — Continuous-variable / photonic primitives** (`quantum_engine/cv_photonic/`) — not yet implemented: Weedbrook, C. et al. (2012), *"Gaussian Quantum Information"* — the CV formalism (qumodes, Gaussian states, covariance matrices) this step implements; Killoran, N. et al. (2019), *"Strawberry Fields: A Software Platform for Photonic Quantum Computing"* — Xanadu's CV-specific simulation platform, the optional real-install counterpart; Aaronson, S. & Arkhipov, A. (2011), *"The Computational Complexity of Linear Optics"* — the theoretical basis for Gaussian Boson Sampling, this step's flagship circuit.
+- **Step 9 — Cross-machine runtime integration** (`quantum_engine/backend_registration/`) — not yet implemented: no new citation — mirrors `npu_engine/op_coverage`'s and `inference_serving/serving_backend`'s existing `available=false`-with-reason-string device-registration pattern.
+- **Step 10 — Cloud QPU hardware landscape** (`quantum_engine/cost_model/`) — not yet implemented: no academic citation — see Vendor docs below (IBM Quantum, AWS Braket, Azure Quantum, Xanadu Cloud documentation) for the current published qubit-count/error-rate/access-model figures this step's comparison draws on.
+
+**Background:** Nielsen & Chuang (2010) is the standard on-ramp for the
+entire gate-based half of this phase (steps 1-7); Weedbrook et al. (2012)
+is the equivalent on-ramp for the CV/photonic half (step 8) — the two
+formalisms don't share much beyond both being quantum mechanics, so
+budget separate reading time for each.
+
+---
+
 ## Cross-cutting: testing & methodology
 
 These apply across every phase, not to one step:
@@ -667,6 +697,15 @@ Emer & Sze (2019) Accelergy · Yang & Hu et al. (2021/2022) muP / Tensor
 Programs V · Yu, S. (2018) nonvolatile-memory neuro-inspired computing
 review · Zhao et al. (2023) PyTorch FSDP.
 
+**Phase 20 additions (scoped, not yet implemented):** Aaronson & Arkhipov
+(2011) linear optics / Gaussian Boson Sampling complexity · Bergholm et
+al. (2018/2022) PennyLane · Deutsch & Jozsa (1992) Deutsch-Jozsa
+algorithm · Farhi, Goldstone & Gutmann (2014) QAOA · Grover (1996)
+quantum search · Killoran et al. (2019) Strawberry Fields · Nielsen &
+Chuang (2010) *Quantum Computation and Quantum Information* · Peruzzo et
+al. (2014) VQE · Preskill (2018) NISQ · Shor (1997) quantum factoring ·
+Weedbrook et al. (2012) Gaussian quantum information.
+
 ---
 
 ## Vendor docs / specs / manuals index
@@ -686,6 +725,48 @@ review · Zhao et al. (2023) PyTorch FSDP.
 | Analog/unconventional compute | No vendor toolchain exists to document (no analog/neuromorphic silicon or SDK) — Phase 17's "vendor docs" are the primary-source papers above (ISAAC, PRIME, Timeloop, Accelergy) |
 | SciML/dynamical systems | `scipy.integrate` docs (reference ODE/SDE solver implementations to check against), `diffrax`/`torchdiffeq` docs (existing Neural-ODE libraries, useful for API-shape comparison even if not depended on) |
 | Framework-native training | PyTorch docs (`torch.autograd`, `torch.compile`, `torch.distributed`, FSDP), JAX docs (`jit`/`vmap`/`pmap`/`grad`, `jax.sharding`), PyTorch Lightning docs, DeepSpeed docs, Ray Train docs |
+| Quantum computing | IBM Quantum docs (Qiskit, real-hardware job submission), AWS Braket developer guide, Azure Quantum docs, Xanadu Cloud / PennyLane / Strawberry Fields docs |
+
+---
+
+## Adjacent Engineering Disciplines (career reference, not a repo phase)
+
+Encountered while researching semiconductor manufacturing equipment
+roles (EUV lithography — ASML/Zeiss-style systems engineering). Kept
+here for reference since it's a genuinely different set of engineering
+disciplines (photonics, plasma physics, precision mechatronics, vacuum
+systems, thin-film materials science) than anything buildable in this
+software-only repo — unlike Phases 17-20, this doesn't get a PLAN.md/
+SCOPE.md phase, since there's no meaningful way to represent real
+plasma/vacuum/optics physics as running code the way analog crossbar
+compute or quantum circuits can be. Logged 2026-09-12.
+
+**1. EUV Light Generation & Plasma Physics** — manipulating matter at
+the atomic level with high-energy lasers.
+- Engineering branches: Optical Engineering, Engineering Physics, Electrical Engineering
+- Degrees: Ph.D. or M.S. in Physics, Optical Sciences, or Electrical Engineering
+- Key undergrad courses: Electromagnetism/Electrodynamics (light-matter interaction); Laser Physics/Quantum Electronics (stimulated emission, laser cavities); Atomic & Plasma Physics (how gas/tin becomes plasma and emits specific wavelengths); Optoelectronics (optical signals to electrical control systems)
+
+**2. High-Precision Laser Targeting & Positioning** — hitting a moving
+tin droplet 50,000 times per second: extreme mechanical speed plus
+microsecond sensor feedback.
+- Engineering branches: Mechatronics Engineering, Mechanical Engineering, Aerospace Engineering (Guidance & Control)
+- Degrees: B.S./M.S. in Mechatronics or Mechanical Engineering (Control Systems focus)
+- Key undergrad courses: Feedback Control Systems (real-time positioning-error correction loops); Dynamics and Vibrations (modeling high-speed physical component motion); Digital Signal Processing (processing sensor data fast enough to track the droplets); Sensors and Actuators (piezo-electric motors, high-speed optical sensors)
+
+**3. Absolute Vacuum & Thermal Management** — EUV light dies in air, so
+the system lives in a vacuum; meanwhile the lasers generate heat that
+can warp components by a fraction of a nanometer.
+- Engineering branches: Mechanical Engineering, Aerospace Engineering, Materials Science Engineering
+- Degrees: B.S./M.S. in Mechanical or Aerospace Engineering
+- Key undergrad courses: Thermodynamics (heat generation, energy conservation, system states); Heat Transfer — conduction/convection/radiation (managing thermal loads where air cooling is impossible); Fluid Mechanics/Gas Dynamics (low-pressure hydrogen gas flow, component protection); Vacuum Technology (seals, pumps, outgassing of materials)
+
+**4. Atomic-Scale Mirrors & Debris Prevention** — mirrors that reflect a
+wavelength normal glass passes straight through, protected from
+exploded-tin-debris coating.
+- Engineering branches: Materials Science Engineering, Chemical Engineering, Nanotechnology
+- Degrees: B.S./M.S./Ph.D. in Materials Science, Chemistry, or Chemical Engineering
+- Key undergrad courses: Solid State Physics/Materials Chemistry (crystalline atomic arrangement); Thin Film Deposition & Characterization (flawless atomic layering, e.g. alternating silicon/molybdenum); Surface Science/Tribology (friction, wear, atomic-level smoothness); Transport Phenomena (tin-debris diffusion and reaction with protective hydrogen gas)
 
 ---
 

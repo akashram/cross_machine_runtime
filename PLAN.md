@@ -865,6 +865,99 @@ Every framework port's numerical output is checked against this repo's existing 
 
 ---
 
+## Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute
+**Estimated duration: 1–2 months**
+**Position in sequence:** Added 2026-09-12, not in the original 12-phase
+scope. Lives in `quantum_engine/`. Unlike Phases 3/7/8/15 (real hardware
+exists but is toolchain/rental-gated) and unlike Phase 17 (no rentable
+silicon exists at all), quantum computing sits in a third position: no
+quantum hardware exists locally, but classical simulation of a modest
+qubit count (roughly up to 20-25 qubits on this Mac, memory-bound at
+`2^n` complex amplitudes) is not a stand-in or an approximation — it is
+the exact, correct physics, just without noise or the scale where
+classical simulation becomes intractable. So most of this phase is
+real, run-for-real code, with cloud QPU access as the eventual hardware
+validation step, the same shape as Phase 3/7/8/15's "code-complete,
+hardware validation deferred" pattern — except here "hardware" means a
+real cloud quantum processor (IBM Quantum, AWS Braket, Azure Quantum, or
+Xanadu Cloud) rather than a rented classical accelerator.
+
+**Why this phase exists:** this repo's stated goal is a cross-machine
+runtime that actually dispatches to different backends (CPU/GPU/FPGA/
+TPU/NPU, via `compiler/placement` and `inference_serving/serving_backend`'s
+`ServingRouter`). A quantum processing unit is a genuinely different
+kind of backend — probabilistic (shot-based sampling, not deterministic
+output), queue-scheduled, and reachable only over the network to a cloud
+provider — and adding it is the most literal way to make "cross-machine"
+mean actually-different-machines rather than actually-different-
+accelerator-cards. Also closes a real gap: nothing in this repo touches
+quantum computing at all, despite it being a distinct compute paradigm
+from everything in Phases 1-19 (including Phase 17's analog compute,
+which is resistive/neuromorphic, not quantum).
+
+### What to learn first
+- Qubit/gate model basics: superposition, entanglement, the Born rule,
+  unitary evolution, measurement collapse — enough to hand-roll a
+  state-vector simulator correctly
+- Universal gate sets and canonical algorithms: Deutsch-Jozsa, Grover's
+  search, the quantum Fourier transform — the standard "prove you
+  understand the model" circuits
+- NISQ-era realities (Preskill 2018): today's quantum hardware is noisy
+  and has no large-scale error correction yet, which is why hybrid
+  quantum-classical algorithms (VQE, QAOA) — short, noise-tolerant
+  quantum circuits wrapped in a classical optimization loop — are the
+  actually-deployed pattern on real cloud QPUs, not deep fault-tolerant
+  circuits
+- Continuous-variable (CV) / photonic quantum computing as a genuinely
+  different hardware paradigm from the qubit-based model above: qumodes
+  instead of qubits, Gaussian states, squeezing/homodyne measurement,
+  Gaussian Boson Sampling — this is Xanadu's specific hardware approach,
+  and it is not just "qubits but optical"; the state space and native
+  gate set are different enough to warrant separate treatment
+- What real cloud QPU access actually looks like: job submission to a
+  queue, shot-based sampling (many repeated circuit runs, not one
+  deterministic answer), and real, currently-published qubit-count/
+  gate-error-rate/coherence-time numbers per provider
+
+### Build order
+1. **State-vector simulator fundamentals** — hand-rolled, zero new dependencies: a `2^n`-amplitude complex state vector, single/multi-qubit gate application (X, H, CNOT, rotation gates) as sparse/structured tensor contraction, measurement/sampling. Verified against known circuit identities (Bell state, GHZ state, teleportation) and unitarity preserved to numerical precision. Real, run locally, no toolchain gate — same "hand-roll the primitive first" precedent as `foundation/proptest` and `observability/opentelemetry`.
+2. **Canonical algorithms** — Deutsch-Jozsa, Grover's search, and the quantum Fourier transform on the step-1 simulator; Grover's verified to find the marked item in the expected `O(sqrt(N))` iterations, checked exactly against brute force at small `n` — the same "checkable structural claim, not just argued" pattern as `adversarial/pgd`'s FGSM-equivalence check.
+3. **Noise/decoherence channel model** — depolarizing and amplitude-damping noise channels applied per-gate; measures how circuit fidelity degrades with circuit depth and noise strength. Structurally mirrors `analog_engine/device_model`'s noise-injection pattern — quantum decoherence and analog device noise are different physics with the same "noise degrades a computed result, measure how much" shape.
+4. **Quantum error correction, minimal** — a small real code (3-qubit bit-flip repetition code, or Shor's 9-qubit code if step 3's noise model supports the needed channel types) demonstrated actually protecting a logical qubit against step 3's injected noise, measured logical vs. physical error rate.
+5. **Variational Quantum Eigensolver (VQE)** — the flagship hybrid quantum-classical algorithm: a parameterized quantum circuit (ansatz) evaluated on the step-1 simulator, driven by a classical optimizer (reuse `ml/`'s optimizers, e.g. gradient descent or `ml/bayesian_opt`) to find the ground-state energy of a small toy Hamiltonian (e.g. H2 in a minimal basis, or a small spin chain). Verified against the Hamiltonian's exact diagonalization (classically tractable at this size) as ground truth.
+6. **QAOA** — Quantum Approximate Optimization Algorithm applied to a small MaxCut instance; honest comparison against a classical baseline (brute force at this size, or a classical heuristic) — in the spirit of Phase 12c's honest "does the sophisticated method actually beat the simple baseline at this scale" findings, not an assumed quantum-advantage narrative.
+7. **PennyLane framework-native step** — reimplement steps 5-6 using PennyLane's real automatic differentiation of quantum circuits (ask before installing, per the standing local-install policy — same as JAX for `tpu_engine` and PyTorch/JAX for Phase 19), compared directly against the hand-rolled step 5/6 results. PennyLane is Xanadu's own open-source library, so this step doubles as the same kind of framework-fluency demonstration Phase 19 built for PyTorch/JAX, specifically relevant to CV/photonic quantum computing employers.
+8. **Continuous-variable / photonic primitives** — qumodes, Gaussian states, the squeezing/displacement/beamsplitter gate set, homodyne/heterodyne measurement, and a small Gaussian Boson Sampling circuit — either hand-rolled (Gaussian-state formalism is linear algebra on covariance matrices, tractable without a new dependency) or via Strawberry Fields (ask before installing). This is the most direct connection to Xanadu's specific hardware approach and the step most worth doing carefully.
+9. **Cross-machine runtime integration** — register a QPU backend candidate the same way Phase 15 registered NPU: `available=false` with an honest reason string, in the `compiler/placement`/`inference_serving/serving_backend` style dispatch pattern, plus a real (simulator-backed) code path showing what a "run this circuit" call would look like once a real cloud QPU credential exists. This is the actual "cross-machine runtime hitting a genuinely different backend" plumbing, not just a simulator off in its own corner.
+10. **Cloud QPU hardware landscape + cost/qubit/error-rate model** — a written, literature/vendor-doc-grounded comparison (same honest-labeling convention as Phase 17's NVM comparison) of IBM Quantum, AWS Braket (aggregating IonQ, Rigetti, QuEra), Azure Quantum (IonQ, Quantinuum, Rigetti), and Xanadu Cloud (real photonic/CV hardware, reachable directly via steps 7-8's own framework) — current published qubit counts, gate error rates, coherence times, and access/cost model per provider, feeding directly into the eventual hardware-validation choice.
+
+### Deliverables
+- A correct, verified state-vector simulator plus 3 canonical algorithms checked against brute-force/closed-form ground truth
+- A noise-channel model and a small working error-correction demonstration
+- A real VQE result checked against exact diagonalization, and a QAOA result with an honest comparison against a classical baseline
+- A PennyLane-based reimplementation of VQE/QAOA, directly compared against the hand-rolled version
+- Working CV/photonic primitives including a small Gaussian Boson Sampling circuit
+- A registered (unavailable, honestly labeled) QPU backend in the runtime's device-dispatch pattern
+- A cloud QPU provider comparison table, grounded in current published hardware specs
+- Design doc: "Quantum Computing & Hybrid Quantum-Classical Compute"
+
+### Definition of done
+Every algorithm is checked against an independent classical ground truth (brute force, exact diagonalization, or a known closed-form result) at the small scale simulated — not just "the circuit runs and produces some output." The PennyLane step's results agree with the hand-rolled version to the precision both methods should agree at. The QAOA and cost-model steps make honest, specific claims rather than an assumed quantum-advantage narrative.
+
+### Hardware access note
+No quantum hardware exists locally, and unlike Phase 17's analog compute,
+this is not "no rental story exists" — real cloud QPU access is broadly
+available today (IBM Quantum's free tier, AWS Braket, Azure Quantum,
+Xanadu Cloud), just not yet provisioned here. Classical state-vector
+simulation at the qubit counts used in steps 1-8 is exact, not
+approximate — the gap to real hardware is noise realism and scale, not
+correctness. When the hardware-validation pass reaches this phase,
+Xanadu Cloud is the most direct fit for steps 7-8 specifically (same
+PennyLane/Strawberry-Fields framework, real photonic QPU); IBM Quantum/
+AWS Braket/Azure Quantum are the fit for the gate-based steps 1-6.
+
+---
+
 ## Phase 11: Polish + Portfolio
 **Estimated duration: 1–2 months (ongoing throughout)**
 

@@ -883,6 +883,37 @@ See `READING_LIST.md` for the full citation list backing all three phases
 (analog/PPA-modeling papers, SciML/unconventional-architecture papers,
 PyTorch/JAX framework references).
 
+**Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — SCOPED
+2026-09-12, not yet started.** Lives in `quantum_engine/` (planned).
+Unlike Phases 17-19's JD-gap-analysis origin, this one closes a
+different kind of gap: the repo has zero quantum computing content, a
+fully separate compute paradigm from everything in Phases 1-19
+(including Phase 17's analog compute, which is resistive/neuromorphic,
+not quantum). 10 planned steps: a hand-rolled state-vector simulator and
+canonical algorithms (Deutsch-Jozsa/Grover/QFT), a noise/decoherence
+model mirroring `analog_engine/device_model`'s pattern, minimal quantum
+error correction, VQE and QAOA (the standard hybrid quantum-classical
+algorithms, checked against exact diagonalization / a classical
+baseline respectively), a PennyLane framework-native step (Xanadu's own
+library — ask before installing, per the standing local-install
+policy), continuous-variable/photonic primitives (qumodes, Gaussian
+states, Gaussian Boson Sampling — Xanadu's specific hardware approach,
+not just "qubits but optical"), a QPU backend registered in the
+runtime's device-dispatch pattern (mirroring Phase 15's NPU
+registration — the literal "cross-machine runtime hits a genuinely
+different backend" plumbing), and a cloud QPU provider landscape/cost
+model (IBM Quantum, AWS Braket, Azure Quantum, Xanadu Cloud). Unlike
+every other hardware-gated phase, small-qubit-count classical simulation
+here is exact, not a stand-in — the gap to real hardware is noise
+realism and scale, not correctness, so most of this phase is expected to
+be real, run-locally work like Phases 9/10/12-14/17-19, with real cloud
+QPU access (Xanadu Cloud most directly, for the CV/photonic steps) as
+the eventual hardware-validation step rather than a blocking
+prerequisite for the rest of the phase. See PLAN.md's Phase 20 section
+and SCOPE.md's "Quantum Computing & Hybrid Quantum-Classical Compute"
+for full detail, and `READING_LIST.md`'s Phase 20 section for citations
+ahead of any commits.
+
 ---
 
 ## Execution strategy (updated 2026-07-19)
@@ -935,6 +966,19 @@ installed locally — see the pre-hardware TODO in project memory on the
 standing "no new local installs without asking" decision, which now also
 covers Docker/kubectl alongside the existing JAX/Java-TLC entries).
 
+**Update 2026-09-12: Phase 20 (Quantum Computing) scoped, not yet
+implemented — "everything code-complete" is no longer true.** Same
+pattern as the 2026-07-29/2026-08-09 additions: a new phase got scoped
+in after the previous "nothing left but hardware validation" milestone,
+so that claim is stale again until Phase 20's locally-codeable steps
+(1-6, 9-10; steps 7-8 need an install decision first, see below) land.
+Unlike Phases 17-19, Phase 20 wasn't found via a JD gap analysis — it
+closes a different kind of gap (zero quantum computing content at all).
+Steps 7 (PennyLane) and 8 (optionally Strawberry Fields) need a new
+local install decision before they can proceed, per the standing
+no-new-local-installs policy — ask before installing either, same as
+was done for JAX (Phase 8) and PyTorch/JAX/Ray (Phase 19).
+
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
 
@@ -950,6 +994,7 @@ Work through phases in the same order, one hardware type at a time.
 | Phase 9 (Inference) | GPU with large VRAM | p3.2xlarge or p4d |
 | Phase 10 (Observability) | Linux (eBPF) | any Linux |
 | Phase 12 (ML) | Any (mostly CPU) | c5.2xlarge |
+| Phase 20 (Quantum) | Real cloud QPU | IBM Quantum, AWS Braket, Azure Quantum, Xanadu Cloud (CV/photonic steps specifically) |
 
 ### When returning to a phase on cloud hardware
 1. SSH into the appropriate instance.
