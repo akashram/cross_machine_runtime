@@ -914,6 +914,37 @@ and SCOPE.md's "Quantum Computing & Hybrid Quantum-Classical Compute"
 for full detail, and `READING_LIST.md`'s Phase 20 section for citations
 ahead of any commits.
 
+**Phase 21: HPC Storage Engineering for AI Workloads — SCOPED
+2026-09-12, not yet started.** Lives in `hpc_storage/` (planned),
+cross-referencing rather than duplicating
+`distributed_training/gpudirect_storage`/`checkpoint`/`data_loading` and
+`networking/rdma_v1`/`nic_deep_dive`/`multitenancy`. Closes a gap found
+by checking the repo against what an HPC storage engineer role (e.g.
+tuning VAST Data for AI training workloads) actually needs: real code
+already exists for the compute-side half of the storage story (the GDS
+client, offload logic, checkpoint sharding) but nothing about the
+parallel filesystem layer itself or the I/O-pattern/capacity-planning
+reasoning around it. 10 planned steps: real I/O-pattern characterization
+of the existing data-loading/checkpoint code, a small-file metadata
+bottleneck study (the real problem `webdataset_shard` already solves),
+a literature/vendor-doc-grounded comparison of VAST Data vs. WekaFS vs.
+Lustre/GPFS vs. Ceph (same honest-labeling convention as Phase 17's NVM
+comparison), a VAST DASE architecture deep dive connected directly to
+the existing `gpudirect_storage` step, NFS/RDMA storage-network tuning
+applying `networking`'s existing RDMA primitives to bulk storage traffic,
+a real checkpoint-burst ("thundering herd") capacity-planning model, a
+real data-reduction measurement on this repo's own artifacts, a
+storage-QoS extension of `networking/multitenancy`, a DLIO-style AI I/O
+benchmark run against this repo's real components, and a VAST access +
+hardware-validation plan (no simple hourly cloud rental exists for VAST/
+WekaFS/Lustre-GPFS, unlike GPU/FPGA/TPU/QPU — a genuinely different
+access path to plan for). Steps 1, 2, 6, 7, 9 need no new hardware or
+install and should end up real, run-locally work; steps 3, 4, 5, 8, 10
+are expected to stay literature/vendor-doc-grounded and explicitly
+labeled as such. See PLAN.md's Phase 21 section and SCOPE.md's "HPC
+Storage Engineering for AI Workloads" for full detail, and
+`READING_LIST.md`'s Phase 21 section for citations ahead of any commits.
+
 ---
 
 ## Execution strategy (updated 2026-07-19)
@@ -979,6 +1010,15 @@ local install decision before they can proceed, per the standing
 no-new-local-installs policy — ask before installing either, same as
 was done for JAX (Phase 8) and PyTorch/JAX/Ray (Phase 19).
 
+**Update 2026-09-12: Phase 21 (HPC Storage Engineering) also scoped,
+not yet implemented.** Same session as Phase 20 — a second gap found by
+checking the repo against a different role family (HPC storage
+engineering, e.g. tuning VAST Data for AI workloads) rather than a JD
+batch. Steps 1, 2, 6, 7, 9 need no new hardware or install and can start
+immediately; steps 3, 4, 5, 8, 10 are literature/vendor-doc-grounded by
+design (no parallel filesystem exists locally or via simple cloud
+rental).
+
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
 
@@ -995,6 +1035,7 @@ Work through phases in the same order, one hardware type at a time.
 | Phase 10 (Observability) | Linux (eBPF) | any Linux |
 | Phase 12 (ML) | Any (mostly CPU) | c5.2xlarge |
 | Phase 20 (Quantum) | Real cloud QPU | IBM Quantum, AWS Braket, Azure Quantum, Xanadu Cloud (CV/photonic steps specifically) |
+| Phase 21 (HPC Storage) | Real parallel filesystem | No hourly rental — VAST Data/WekaFS/Lustre-GPFS need a vendor POC/demo program or an HPC center's existing deployment |
 
 ### When returning to a phase on cloud hardware
 1. SSH into the appropriate instance.

@@ -436,6 +436,26 @@ Quantum, Xanadu Cloud — is the eventual hardware-validation step.)*
 - QPU backend registered in the runtime's device-dispatch pattern (`available=false`, honest reason string), the same shape as Phase 15's NPU registration — the literal "cross-machine runtime hits a genuinely different backend" plumbing
 - Cloud QPU provider landscape + cost/qubit-count/error-rate comparison, grounded in current published hardware specs
 
+## HPC Storage Engineering for AI Workloads
+*(Added 2026-09-12, not in the original scope — see Phase 21 in PLAN.md.
+Cross-references `distributed_training/gpudirect_storage`/`checkpoint`/
+`data_loading` and `networking/rdma_v1`/`nic_deep_dive`/`multitenancy`
+rather than duplicating them. Closes a gap: real code exists for the
+compute-side half of the storage story, but nothing about the parallel
+filesystem layer itself or the I/O-pattern/capacity-planning reasoning
+an HPC storage engineer — e.g. tuning VAST Data for AI workloads —
+actually needs.)*
+- Real I/O-pattern characterization of `data_loading`'s loader and `checkpoint`'s save/load path, grounding later steps in a measured profile instead of an assumed one
+- Small-file metadata bottleneck study: many-small-files vs. `webdataset_shard`'s sharded-blob approach, measured locally
+- Parallel/distributed storage comparison: VAST Data vs. WekaFS vs. Lustre/GPFS vs. Ceph on architecture, AI-workload metrics, and deployment model — literature/vendor-doc-grounded, honestly labeled, same convention as Phase 17's NVM comparison
+- VAST DASE (Disaggregated Shared Everything) architecture deep dive, connected directly to `gpudirect_storage`'s existing cuFile client as a real GDS-certified backend
+- NFS/RDMA storage-network tuning (NFSoRDMA/RoCE queue depth, MTU, ECN/PFC), applying `networking/rdma_v1`/`nic_deep_dive`'s existing primitives to bulk storage traffic instead of small collective messages
+- Checkpoint I/O burst ("thundering herd") capacity-planning model using `checkpoint`'s real sharded-checkpoint sizes, same shape as `fpga_engine/pcie_latency`'s latency decomposition
+- Data reduction effectiveness measured on this repo's own real artifacts (checkpoint weights vs. tokenized data/embeddings), not an assumed uniform ratio
+- Storage multi-tenancy/QoS as a direct extension of `networking/multitenancy`, reframed for storage bandwidth/IOPS contention
+- DLIO-style AI I/O benchmark, run locally against this repo's real `transformer`/`data_loading` components
+- VAST access + hardware validation plan, honestly distinguishing "no hourly cloud rental exists" (vendor POC/demo program or an HPC center's deployment) from the spot-instance pattern the rest of the hardware table assumes
+
 ## Portfolio / Career Deliverables
 - `/docs`: RFCs and ADRs for scheduler, memory model, transport protocol (written as internal Google/Meta design docs)
 - Technical blog post per major component

@@ -958,6 +958,86 @@ AWS Braket/Azure Quantum are the fit for the gate-based steps 1-6.
 
 ---
 
+## Phase 21: HPC Storage Engineering for AI Workloads
+**Estimated duration: 1 month**
+**Position in sequence:** Added 2026-09-12, not in the original 12-phase
+scope. Lives in `hpc_storage/`, cross-referencing rather than duplicating
+existing components: `distributed_training/gpudirect_storage`,
+`distributed_training/checkpoint`, `distributed_training/data_loading`,
+and `networking/rdma_v1`/`nic_deep_dive`/`multitenancy`. Closes a gap
+found by checking the repo against what an HPC storage engineer role
+(e.g. tuning VAST Data, WekaFS, or a Lustre/GPFS deployment for AI
+training workloads) actually needs: this repo has real code for the
+*compute-side* half of the storage story (the GDS client, offload logic,
+checkpoint sharding) but nothing about the parallel filesystem layer
+itself, or the I/O-pattern/capacity-planning reasoning a storage
+engineer does around it.
+
+### What to learn first
+- The specific I/O patterns AI training workloads produce, and why
+  they're a different tuning problem from traditional HPC (large
+  sequential scientific-simulation I/O): small-file random reads during
+  shuffled dataset loading, bursty synchronized large-sequential writes
+  during multi-GPU checkpointing, and re-read-heavy access (the same
+  dataset read once per epoch, many epochs)
+- Disaggregated Shared Everything (DASE) and similar scale-out
+  all-flash architectures: separating compute nodes (protocol/metadata
+  handling) from storage nodes (media), vs. traditional parallel
+  filesystems' tighter compute/storage coupling (Lustre's OSS/OST,
+  GPFS's NSD model)
+- GPUDirect Storage's actual role: a direct NVMe-oF/RDMA data path from
+  storage to GPU HBM that bypasses CPU staging entirely — and why the
+  storage backend behind it (not just the GPU-side cuFile client this
+  repo already has) determines whether that path can actually sustain
+  GPU-scale bandwidth
+- NFS over RDMA / RoCE fundamentals: what changes when the transport
+  underneath a familiar protocol (NFS) becomes RDMA instead of TCP, and
+  which tuning knobs (queue depth, MTU/jumbo frames, ECN/PFC congestion
+  control) actually matter for bulk storage traffic vs. the small
+  latency-sensitive collective messages `networking/`'s existing RDMA
+  work optimizes for
+- Data reduction (deduplication + compression) in the specific context
+  of AI training artifacts — why its effectiveness varies wildly between
+  already-compressed training data, less-structured embeddings, and
+  more-compressible model checkpoints, rather than being one number
+
+### Build order
+1. **I/O pattern characterization** — instrument `distributed_training/data_loading`'s loader and `distributed_training/checkpoint`'s save/load path to directly measure their real I/O pattern (sequential vs. random, read vs. write, block-size distribution, burst concurrency) against this repo's own actual training loop — grounds every later step in a real measurement instead of an assumed profile.
+2. **Small-file metadata bottleneck study** — measure the real wall-clock/syscall-count cost of many-small-files (a simulated ImageNet-style dataset of thousands of tiny files) vs. `data_loading/webdataset_shard`'s existing shard-into-large-blobs approach, on this Mac's local filesystem. A real, portable demonstration of the exact problem WebDataset-style sharding exists to solve — disclosed as a local-filesystem stand-in for a real parallel-filesystem metadata server, not an equivalent measurement, but the underlying many-small-files-vs-few-large-files effect is real and transfers.
+3. **Parallel/distributed storage comparison** — VAST Data vs. WekaFS vs. Lustre/GPFS vs. Ceph, compared on architecture (disaggregated all-flash vs. traditional parallel FS), AI-workload-relevant metrics (small-file/metadata performance, GPUDirect Storage certification, data reduction), and typical HPC deployment model — literature/vendor-doc-grounded (no rentable access to any of them), honestly labeled as such, same convention as Phase 17's NVM comparison.
+4. **VAST DASE architecture deep dive + GDS integration** — a detailed treatment of VAST's specific architecture (CNode/DNode disaggregation, QLC flash + NVRAM write buffering, global namespace, similarity-based data reduction) and how it plugs into `distributed_training/gpudirect_storage`'s existing cuFile client as one of the real GDS-certified backends — extends that step's existing hardware-gated context rather than replacing it.
+5. **NFS/RDMA storage-network tuning** — a written analysis applying `networking/rdma_v1`/`nic_deep_dive`'s existing RDMA/NIC primitives to storage traffic specifically: NFS over RDMA (NFSoRDMA)/RoCE parameter tuning (queue depth, MTU/jumbo frames, ECN/PFC) for a GPU-to-storage path, contrasted with the small latency-sensitive collective messages that phase's original RDMA work targets.
+6. **Checkpoint I/O burst ("thundering herd") capacity model** — a real, portable queueing/throughput model (same shape as `fpga_engine/pcie_latency`'s latency decomposition) predicting aggregate storage bandwidth demand when N GPU ranks checkpoint simultaneously, using `distributed_training/checkpoint`'s real sharded-checkpoint sizes as input — a falsifiable capacity-planning number, the kind of sizing calculation done before a real storage procurement.
+7. **Data reduction effectiveness on real AI-workload artifacts** — measure actual compression ratios on this repo's own real artifacts (trained transformer checkpoint weights vs. tokenized training data/embeddings), grounding "global data reduction" vendor claims in a real measurement of what this specific domain's data actually compresses to, rather than assuming a uniform ratio.
+8. **Storage multi-tenancy / QoS** — direct extension of `networking/multitenancy`'s existing fairness/quota logic, reframed for storage bandwidth/IOPS contention between simultaneous training jobs sharing one backend, rather than network bandwidth between peers — same mechanism, different contended resource.
+9. **DLIO-style AI I/O benchmark** — a real, portable reimplementation of the core idea behind Argonne's DLIO benchmark (a deep-learning-specific I/O benchmark, not a generic one), driven by this repo's real `transformer`/`data_loading` components against the local filesystem as a stand-in for the parallel filesystem under test.
+10. **VAST access + hardware validation plan** — unlike GPU/FPGA/TPU spot instances, there's no simple per-hour cloud rental for VAST; real access is typically a vendor POC/demo program or an HPC center's existing deployment. Document this honestly as a different *kind* of hardware-access gap, and what a real validation pass would need once access exists.
+
+### Deliverables
+- A real, measured I/O-pattern characterization of this repo's own data loading and checkpointing code
+- A real small-file-vs-sharded-blob metadata cost comparison
+- A parallel/distributed storage comparison table (VAST/WekaFS/Lustre-GPFS/Ceph), literature-grounded and honestly labeled
+- A VAST DASE architecture writeup connected directly to the existing `gpudirect_storage` step
+- An NFS/RDMA storage-tuning analysis grounded in this repo's existing RDMA primitives
+- A real checkpoint-burst capacity-planning model with a falsifiable bandwidth number
+- A real data-reduction measurement on this repo's own artifacts
+- A storage-QoS extension of `networking/multitenancy`
+- A DLIO-style benchmark run locally against this repo's real components
+- Design doc: "HPC Storage Engineering for AI Workloads"
+
+### Definition of done
+Every step that can produce a real local measurement does (steps 1, 2, 6, 7, 9 need no new hardware or install). Every step that can't (3, 4, 5, 8, 10) is literature/vendor-doc-grounded and explicitly labeled as such rather than presented as measured. The parallel-filesystem comparison and VAST architecture writeup make specific, sourced claims, not marketing-language restatements.
+
+### Hardware access note
+No parallel filesystem of any kind exists locally, and unlike GPU/FPGA/
+TPU/QPU, there's no straightforward hourly cloud rental for VAST/WekaFS/
+Lustre-GPFS — real validation needs either a vendor proof-of-concept
+environment or an HPC center's existing deployment, which is a genuinely
+different access path to plan for than the "spin up a spot instance"
+pattern the rest of the hardware-validation table assumes.
+
+---
+
 ## Phase 11: Polish + Portfolio
 **Estimated duration: 1–2 months (ongoing throughout)**
 

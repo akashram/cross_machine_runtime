@@ -49,6 +49,11 @@ consolidated under a phase instead of a step.
   closes a separate gap this repo had a clean zero on: quantum computing.
   Scoped, not yet implemented — see its section below for planned
   citations ahead of any commits.
+- **Phase 21** (added 2026-09-12, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
+  closes a third gap: HPC storage engineering (parallel filesystems,
+  GPUDirect Storage backends, I/O-pattern tuning for AI workloads).
+  Scoped, not yet implemented, cross-references existing Phase 5/6
+  components rather than duplicating them.
 
 ---
 
@@ -599,6 +604,36 @@ budget separate reading time for each.
 
 ---
 
+## Phase 21: HPC Storage Engineering for AI Workloads — SCOPED, not yet implemented
+
+**Start here:** no `hpc_storage/README.md`/`DESIGN.md` exist yet — this
+section documents the citations behind each planned step, to be matched
+against real commits once implementation starts. Scoped 2026-09-12 (no
+commit hash yet). Cross-references `distributed_training/gpudirect_storage`
+[`88392a5`], `distributed_training/checkpoint`, `distributed_training/
+data_loading`, and `networking/rdma_v1`/`nic_deep_dive`/`multitenancy`
+rather than duplicating them — see their own README/DESIGN entries
+elsewhere in this document.
+
+- **Step 1 — I/O pattern characterization** (`hpc_storage/io_patterns/`) — not yet implemented: no dedicated citation — direct instrumentation of this repo's own existing `data_loading`/`checkpoint` code.
+- **Step 2 — Small-file metadata bottleneck study** (`hpc_storage/metadata_bottleneck/`) — not yet implemented: no dedicated citation; see the WebDataset project (Breuel, T., open-source, no formal paper) under Vendor docs — the real motivation `data_loading/webdataset_shard.h` already implements a solution for.
+- **Step 3 — Parallel/distributed storage comparison** (`hpc_storage/storage_comparison/`) — not yet implemented: Weil, S.A. et al. (2006), *"Ceph: A Scalable, High-Performance Distributed File System"* (OSDI) — the one component in this comparison with a canonical academic paper; Schmuck, F. & Haskin, R. (2002), *"GPFS: A Shared-Disk File System for Large Computing Clusters"* (FAST) — the academic basis for IBM Storage Scale/GPFS. VAST Data, WekaFS, and Lustre have no equivalent peer-reviewed paper — see Vendor docs below; comparison is vendor-doc-grounded and will be labeled as such, same convention as Phase 17's NVM comparison.
+- **Step 4 — VAST DASE architecture deep dive + GDS integration** (`hpc_storage/vast_dase/`) — not yet implemented: no academic citation — see VAST Data architecture documentation under Vendor docs; extends `distributed_training/gpudirect_storage`'s existing cuFile-API code [`88392a5`] with real backend-specific context.
+- **Step 5 — NFS/RDMA storage-network tuning** (`hpc_storage/nfs_rdma_tuning/`) — not yet implemented: no new citation — applies `networking/rdma_v1`'s existing libfabric/RDMA background (see that step's own entry above) to storage traffic instead of collective messages; see NFS over RDMA (NFSoRDMA) vendor/kernel docs under Vendor docs.
+- **Step 6 — Checkpoint I/O burst capacity model** (`hpc_storage/checkpoint_burst_model/`) — not yet implemented: no dedicated citation — same queueing/throughput-model shape as `fpga_engine/pcie_latency`'s latency decomposition, applied to `distributed_training/checkpoint`'s real sharded-checkpoint sizes.
+- **Step 7 — Data reduction effectiveness on real artifacts** (`hpc_storage/data_reduction/`) — not yet implemented: no dedicated citation — a direct measurement, not a literature claim.
+- **Step 8 — Storage multi-tenancy / QoS** (`hpc_storage/storage_multitenancy/`) — not yet implemented: no new citation — direct extension of `networking/multitenancy`'s existing mechanism (see that step's own entry above) to a different contended resource.
+- **Step 9 — DLIO-style AI I/O benchmark** (`hpc_storage/dlio_bench/`) — not yet implemented: Devarajan, H. et al. (2021), *"DLIO: A Data-Centric Benchmark for Scientific Deep Learning Applications"* (IEEE/ACM CCGrid) — the real Argonne benchmark this step reimplements the core idea of, driven by this repo's own `transformer`/`data_loading` components.
+- **Step 10 — VAST access + hardware validation plan** (`hpc_storage/hardware_access_plan/`) — not yet implemented: no dedicated citation — a written plan, not a measurement.
+
+**Background:** none of steps 1-2, 6-9 need anything beyond what
+`distributed_training`'s existing components already assume; steps 3-4
+are the ones worth reading real vendor architecture documentation for
+first (VAST Data's own DASE architecture material is the most direct
+on-ramp, given step 4's specific focus).
+
+---
+
 ## Cross-cutting: testing & methodology
 
 These apply across every phase, not to one step:
@@ -706,6 +741,10 @@ Chuang (2010) *Quantum Computation and Quantum Information* · Peruzzo et
 al. (2014) VQE · Preskill (2018) NISQ · Shor (1997) quantum factoring ·
 Weedbrook et al. (2012) Gaussian quantum information.
 
+**Phase 21 additions (scoped, not yet implemented):** Devarajan et al.
+(2021) DLIO benchmark · Schmuck & Haskin (2002) GPFS · Weil et al. (2006)
+Ceph.
+
 ---
 
 ## Vendor docs / specs / manuals index
@@ -726,6 +765,7 @@ Weedbrook et al. (2012) Gaussian quantum information.
 | SciML/dynamical systems | `scipy.integrate` docs (reference ODE/SDE solver implementations to check against), `diffrax`/`torchdiffeq` docs (existing Neural-ODE libraries, useful for API-shape comparison even if not depended on) |
 | Framework-native training | PyTorch docs (`torch.autograd`, `torch.compile`, `torch.distributed`, FSDP), JAX docs (`jit`/`vmap`/`pmap`/`grad`, `jax.sharding`), PyTorch Lightning docs, DeepSpeed docs, Ray Train docs |
 | Quantum computing | IBM Quantum docs (Qiskit, real-hardware job submission), AWS Braket developer guide, Azure Quantum docs, Xanadu Cloud / PennyLane / Strawberry Fields docs |
+| HPC storage | VAST Data architecture documentation (DASE, similarity-based data reduction), WekaFS documentation, Lustre operations manual, NVIDIA GPUDirect Storage (cuFile) documentation, NFS over RDMA (RFC 8166 / kernel NFSoRDMA docs), DLIO benchmark documentation |
 
 ---
 
