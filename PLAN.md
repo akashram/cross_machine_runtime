@@ -1091,45 +1091,61 @@ instead.
 - Apptainer/Singularity's specific reasons for existing in HPC instead
   of Docker: no daemon, no root requirement, and direct bind-mount-based
   GPU/MPI passthrough designed for shared multi-tenant clusters
+- Linux/OS-level tuning specifically for AI training/inference workloads,
+  as distinct from `cpu_engine/os_tuning`'s existing low-latency-jitter
+  focus (isolcpus/nohz_full/IRQ affinity/C-states/governor, tuned for
+  trading-style tail latency): NUMA balancing policy, transparent huge
+  pages, memory overcommit/swappiness for large-memory training jobs,
+  network buffer sizing for collective/RDMA-heavy throughput, and the
+  `memlock` ulimit RDMA memory registration actually requires
 
 ### Build order
 1. **Real MPI collectives** — reimplement ring all-reduce and a simple multi-rank job using real MPI (OpenMPI or MPICH, via `mpic++`/`mpirun` — ask before installing, per the standing local-install policy), directly compared against `networking/ring_allreduce`'s and `tree_allreduce`'s hand-rolled versions for both correctness and measured latency/bandwidth at the same rank counts.
 2. **OpenMP-native port** — port one of `foundation`'s or `cpu_engine`'s hand-threaded kernels to `#pragma omp parallel for`/reduction clauses (Apple clang needs `libomp` — ask before installing), compared directly against the hand-rolled thread-pool version for correctness and measured speedup.
-3. **Slurm cluster scheduling** — real `slurm.conf`/`sbatch`/`salloc` job scripts wrapping this repo's actual long-running binaries (`distributed_training/training_worker`, `inference_serving`'s serving daemon) as real Slurm jobs. Likely Linux-gated the same way Docker is (Slurm's full feature set depends on Linux cgroups) — write real, complete configs; verify empirically whether any useful subset runs locally before assuming it's fully blocked.
-4. **Cluster health-check / bring-up tooling** — a real node health-check script in the shape of Slurm's own `HealthCheckProgram` mechanism, checking what's actually checkable locally regardless of whether Slurm itself runs here (disk space, expected process/service presence, basic hardware sanity) — portable, runs today.
-5. **Rack-level power & cooling capacity model** — a real, portable model: given per-node power draw (reusing `gpu_engine/power`'s NVML numbers, `fpga_engine/clock_gating`'s power model, or literature-grounded per-CPU/GPU TDP figures), sum to rack level, check against a rack power budget and cooling capacity (PUE, CRAC/CRAH tons), and flag overcommit — same shape as `analog_engine/energy_model`, scaled to rack level.
+3. **Slurm cluster scheduling** — real, complete `slurm.conf`/`cgroup.conf`/`gres.conf` (GPU-aware scheduling) plus `sbatch`/`salloc` job scripts wrapping this repo's actual long-running binaries (`distributed_training/training_worker`, `inference_serving`'s serving daemon) as real Slurm jobs, with real backfill/fairshare/QoS/partition tuning parameters actually set and justified (not left at defaults) — same convention as every other hardware-gated phase in this repo (real CUDA in `gpu_engine`, real HLS in `fpga_engine`): write it complete and correct now, assuming real Linux cluster hardware backs it eventually, rather than partially stubbing it pending a provisioning decision. Cgroup resource containment here is the same mechanism step 10's cgroup v2 tuning targets — they're designed to compose, not duplicate.
+4. **Cluster health-check / bring-up tooling** — a real node health-check script in the shape of Slurm's own `HealthCheckProgram` mechanism (wired as step 3's actual `HealthCheckProgram=` directive, not a standalone script disconnected from it), checking what's actually checkable locally regardless of whether Slurm itself runs here (disk space, expected process/service presence, basic hardware sanity) — portable, runs today.
+5. **Rack-level power & cooling capacity model** — a real model with a real typed input interface designed to accept genuine measured wattage once it exists (from `gpu_engine/power`'s real NVML calls or `fpga_engine/xadc`'s real XRT sensor calls, once either runs on real hardware), falling back to literature-grounded per-CPU/GPU TDP figures only when no real reading is available — the same "code-complete, hardware-gated, upgrades automatically once hardware exists" shape as the rest of this repo, not a permanent simulation. Sums to rack level, checks against a rack power budget and cooling capacity (PUE, CRAC/CRAH tons), flags overcommit — same shape as `analog_engine/energy_model`, scaled to rack level.
 6. **Cluster reliability / MTBF-MTTR model** — a real, portable reliability-engineering model: expected node failure rate, cluster-level availability given N nodes and per-node MTBF, and the redundancy/replication tradeoff curve — real math, same rigor as this repo's other cost models, directly answering the JD's MTBF/MTBA/failure-mode requirement.
 7. **NUMA/PCIe/network-topology-aware node design reasoning** — a written analysis connecting `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing, previously-separate findings into an explicit "how would I spec an HPC node" argument — composition, not new measurement.
 8. **HW/SW co-debug case-study consolidation** — a written portfolio piece pulling together this repo's own real cross-boundary debugging stories (`networking/raft`'s detach-not-join SIGSEGV, `fpga_engine/cocotb`'s one-cycle-early DMA read, `ml/pca`'s float32 precision bug) as direct, already-real evidence for "debugging across software/OS/hardware boundaries" — no new code, just honest consolidation of what already happened.
 9. **Apptainer/Singularity container runtime** — a real Apptainer definition file wrapping one of this repo's binaries, contrasted directly against Phase 16's Docker approach (no-daemon, no-root, direct bind-mount GPU/MPI passthrough) — likely Linux-gated like Docker; write it real and complete, verify locally what's actually blocked before assuming full blockage.
-10. **Rack & facilities reference material** — physical rack integration (cabling, power distribution, physical layout, serviceability) and semiconductor/high-reliability-environment exposure are not representable as running code, the same honest call already made for the EUV material — filed as a `READING_LIST.md` reference appendix, cross-linked from this phase's design doc, not stub code pretending to model cabling.
+10. **Linux/OS tuning for HPC AI workloads** — extends `cpu_engine/os_tuning`'s exact script-per-knob + before/after benchmark-harness pattern (real, individually-toggleable scripts, not one monolithic toggle) to AI/HPC-training-throughput knobs instead of that step's low-latency-jitter ones: `numa_balancing` policy, transparent huge pages (`/sys/kernel/mm/transparent_hugepage/enabled`, distinct from `cpu_engine/hugepage`'s explicit hugepage allocation), `vm.swappiness`/`vm.overcommit_memory` for large-memory training jobs, `net.core.rmem_max`/`wmem_max` and related sysctls for collective/RDMA-heavy throughput, the `memlock` ulimit RDMA memory registration actually requires, and cgroup v2 resource isolation feeding directly into step 3's Slurm containment. Real, complete Linux scripts; whatever's checkable locally (e.g. reading current sysctl/ulimit values, dry-run validation) runs today, the rest is honestly marked Linux-hardware-gated like `os_tuning` itself already is.
+11. **Rack & facilities reference material** — physical rack integration (cabling, power distribution, physical layout, serviceability) and semiconductor/high-reliability-environment exposure are not representable as running code, the same honest call already made for the EUV material — filed as a `READING_LIST.md` reference appendix, cross-linked from this phase's design doc, not stub code pretending to model cabling.
 
 ### Deliverables
 - A real MPI-based ring all-reduce, directly compared against the hand-rolled version
 - A real OpenMP port of an existing hand-threaded kernel, with a measured speedup comparison
-- Real, complete Slurm job configs wrapping this repo's real long-running binaries, with an honest empirical account of what runs locally vs. what needs a real Linux cluster
-- A portable node health-check tool
-- A real rack power/cooling capacity model with a concrete overcommit-detection example
+- Real, complete Slurm job configs (including GPU-aware `gres.conf` and cgroup containment) wrapping this repo's real long-running binaries, with real backfill/fairshare/QoS tuning parameters and an honest empirical account of what runs locally vs. what needs a real Linux cluster
+- A portable node health-check tool wired as Slurm's real `HealthCheckProgram`
+- A real rack power/cooling capacity model with a real interface for measured wattage and a concrete overcommit-detection example
 - A real cluster reliability/MTBF-MTTR model
 - A written NUMA/PCIe/topology node-design analysis
 - A written HW/SW co-debug portfolio piece citing this repo's own real bugs
 - A real Apptainer definition file, contrasted against Phase 16's Docker approach
+- Real, complete Linux/OS AI-workload tuning scripts, same convention as `cpu_engine/os_tuning`
 - Design doc: "HPC Cluster Systems Engineering"
 
 ### Definition of done
-Steps 1, 2, 4, 5, 6, 7, 8 produce something real and run/checked locally (1-2 need an install decision first, asked and granted). Steps 3 and 9 are written as real, complete configs regardless of whether Slurm/Apptainer actually run on this Mac — their local-runnability is verified empirically, not assumed, and whatever doesn't run is disclosed honestly rather than silently skipped. Step 10 is explicitly reference material, not code.
+Steps 1, 2, 4, 5, 6, 7, 8 produce something real and run/checked locally (1-2 need an install decision first, asked and granted). Steps 3, 9, and 10 are written as real, complete configs/scripts regardless of whether Slurm/Apptainer/the Linux-only sysctls actually run on this Mac — their local-runnability is verified empirically, not assumed, and whatever doesn't run is disclosed honestly rather than silently skipped, same convention `cpu_engine/os_tuning` already established. Step 11 is explicitly reference material, not code. Step 5's power model is checked to actually consume a real measured-wattage input, not just its literature-default fallback, once such an input is available.
 
 ### Hardware access note
-Slurm and Apptainer both lean on Linux-specific kernel features (cgroups)
-for their full feature set — like Docker/kubectl, real validation of
-either likely belongs in the same eventual cloud Linux instance used for
-GPU/FPGA/TPU hardware validation, not a separate local install unless
-asked for and granted. MPI and OpenMP have no such gate — OpenMPI/MPICH
-and `libomp` install and run on this Mac directly, so steps 1-2 don't
-need to wait for cloud hardware at all. Java (`openjdk`), needed for
-Phase 10's TLC step, is a separate already-tracked pending install
-decision (see project memory) — not newly introduced by this phase, and
-not required by anything in it.
+Slurm, Apptainer, and step 10's AI-workload sysctls all lean on
+Linux-specific kernel features (cgroups, `/proc`/`/sys` tunables with no
+macOS equivalent) for their full feature set — like Docker/kubectl, real
+validation of any of them likely belongs in the same eventual cloud
+Linux instance used for GPU/FPGA/TPU hardware validation, not a separate
+local install unless asked for and granted. MPI and OpenMP have no such
+gate — OpenMPI/MPICH and `libomp` install and run on this Mac directly,
+so steps 1-2 don't need to wait for cloud hardware at all. Step 5's real
+power-telemetry input has the same access gate as Phase 3/7's own
+hardware validation (`gpu_engine/power`/`fpga_engine/xadc` need real
+GPU/FPGA hardware to produce a real reading) — this phase doesn't
+introduce a new gap here, it just makes the existing one visible in the
+capacity-planning output instead of hiding it behind a permanent
+literature default. Java (`openjdk`), needed for Phase 10's TLC step, is
+a separate already-tracked pending install decision (see project
+memory) — not newly introduced by this phase, and not required by
+anything in it.
 
 ---
 

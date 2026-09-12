@@ -963,23 +963,37 @@ understanding of collectives, scheduling, and threading, but has never
 called real MPI or OpenMP, never run a real cluster scheduler, and has
 no rack-level power/cooling/reliability model — the same "hand-rolled
 first, framework-fluency second" pattern Phase 19 closed for PyTorch/
-JAX, applied to the classic HPC toolchain. 10 planned steps: real MPI
+JAX, applied to the classic HPC toolchain. 11 planned steps: real MPI
 ring all-reduce compared against `networking/ring_allreduce`'s
 hand-rolled version, a real OpenMP port of a hand-threaded kernel, real
-Slurm job configs wrapping this repo's real long-running binaries
-(likely Linux-gated like Docker, verified empirically rather than
-assumed), portable node health-check tooling, a real rack-level
-power/cooling capacity model, a real cluster reliability/MTBF-MTTR
-model, a written NUMA/PCIe/topology node-design analysis composing
-existing findings, a written HW/SW co-debug portfolio piece
-consolidating this repo's own real bugs (raft's SIGSEGV, cocotb's DMA
-timing bug, PCA's float32 bug), a real Apptainer/Singularity definition
-file contrasted against Phase 16's Docker approach, and rack/facilities
+complete Slurm job configs (incl. GPU-aware `gres.conf` and cgroup
+containment) wrapping this repo's real long-running binaries with real
+backfill/fairshare/QoS tuning set (likely Linux-gated like Docker,
+verified empirically rather than assumed), portable node health-check
+tooling wired as Slurm's real `HealthCheckProgram`, a real rack-level
+power/cooling capacity model with a real interface for measured wattage
+(falls back to literature TDP figures until `gpu_engine/power`/
+`fpga_engine/xadc` actually run on real hardware — upgrades
+automatically rather than staying a permanent simulation), a real
+cluster reliability/MTBF-MTTR model, a written NUMA/PCIe/topology
+node-design analysis composing existing findings, a written HW/SW
+co-debug portfolio piece consolidating this repo's own real bugs
+(raft's SIGSEGV, cocotb's DMA timing bug, PCA's float32 bug), a real
+Apptainer/Singularity definition file contrasted against Phase 16's
+Docker approach, real Linux/OS AI-workload tuning scripts (step 10 —
+NUMA balancing, transparent huge pages, memory overcommit/swappiness,
+RDMA/collective network sysctls, `memlock` ulimit, cgroup v2 —
+extending `cpu_engine/os_tuning`'s exact pattern to AI-throughput knobs
+instead of that step's low-latency-jitter ones), and rack/facilities
 physical-integration content filed as `READING_LIST.md` reference
 material (same treatment as the EUV material) rather than code. MPI/
 OpenMP (steps 1-2) need an install decision but no cloud hardware;
-Slurm/Apptainer (steps 3, 9) are expected to need Linux, like Docker.
-See PLAN.md's Phase 22 section and SCOPE.md's "HPC Cluster Systems
+Slurm/Apptainer/step 10's sysctls (steps 3, 9, 10) are expected to need
+Linux, like Docker — written real and complete regardless, per the
+user's explicit direction to treat this exactly like every other
+hardware-gated phase (real CUDA in `gpu_engine`, real HLS in
+`fpga_engine`) rather than provisioning infrastructure first. See
+PLAN.md's Phase 22 section and SCOPE.md's "HPC Cluster Systems
 Engineering" for full detail, and `READING_LIST.md`'s Phase 22 section
 for citations ahead of any commits.
 
@@ -1068,11 +1082,35 @@ specifically. Steps 1-2 (MPI, OpenMP) need only a local install
 decision, no cloud hardware. Steps 4-8 are portable, no new dependency.
 Steps 3, 9 (Slurm, Apptainer) are expected to need Linux, like Docker —
 write them real and complete, verify empirically what's actually
-blocked rather than assuming full blockage. Step 10 (rack/facilities
+blocked rather than assuming full blockage. Step 11 (rack/facilities
 physical integration) is reference material, filed in READING_LIST.md
 alongside the EUV material, not code — same honest call as that
 material, for the same reason (no way to represent physical cabling/
 cooling layout as running code).
+
+**Update 2026-09-12, same session, follow-up: user asked to actually get
+Slurm running on Linux and tune it for real, and questioned whether
+literature-modeled power/cooling numbers can support a genuine
+"professional capacity planning" claim.** Answer given: no real
+telemetry exists anywhere in the project yet (zero hardware provisioned
+at all), but the real NVML/XRT sensor code already exists in
+`gpu_engine/power`/`fpga_engine/xadc` — this is a hardware-access gap,
+not a coding gap. Offered a choice between provisioning real
+infrastructure now (a local multi-VM Slurm cluster via Multipass at
+zero cloud cost, and/or bundling real GPU hardware validation to get
+real NVML power numbers) versus writing complete code and deferring
+provisioning. **User chose the latter explicitly: treat Slurm and the
+power model exactly like every other hardware-gated phase in this
+repo — real, complete code now, assuming real hardware backs it
+eventually, no VM/cloud provisioning triggered by this decision.**
+This is why step 3 (Slurm) now specifies real backfill/fairshare/QoS
+parameters actually set rather than left at defaults, and step 5 (rack
+power model) now specifies a real typed interface for measured wattage
+rather than a permanent literature-only model. Same request also added
+step 10 (Linux/OS tuning for HPC AI workloads), confirmed as a genuine
+gap distinct from `cpu_engine/os_tuning`'s existing latency-jitter
+focus after checking that step's actual content first rather than
+assuming.
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.

@@ -657,7 +657,8 @@ commit hash yet). Cross-references `networking/ring_allreduce`/
 - **Step 7 — NUMA/PCIe/topology node-design analysis** (`hpc_cluster/node_design/`) — not yet implemented: no new citation — composes `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings (see those steps' own entries above).
 - **Step 8 — HW/SW co-debug case-study consolidation** (`hpc_cluster/codebug_portfolio/`) — not yet implemented: no citation — consolidates this repo's own real bugs, see [[project_raft_test_segfault_resolved]] and the `fpga_engine/cocotb`/`ml/pca` entries above.
 - **Step 9 — Apptainer/Singularity container runtime** (`hpc_cluster/apptainer/`) — not yet implemented: Kurtzer, G.M., Sochat, V. & Bauer, M.W. (2017), *"Singularity: Scientific containers for mobility of compute"* (PLOS ONE) — the original Singularity (now Apptainer) paper, and its specific no-daemon/no-root design rationale for shared HPC clusters. Contrasted against Phase 16's Docker approach.
-- **Step 10 — Rack & facilities reference material** — not yet implemented (reference material, not code) — see the "Adjacent Engineering Disciplines" appendix below, where this is filed alongside the EUV lithography material.
+- **Step 10 — Linux/OS tuning for HPC AI workloads** (`hpc_cluster/os_tuning_ai/`) — not yet implemented: no dedicated academic citation — extends `cpu_engine/os_tuning`'s exact pattern (see that step's own entry above) to AI/HPC-training-throughput sysctls/ulimits instead of low-latency-jitter ones; see the Linux kernel's `Documentation/admin-guide/mm/transparent-hugepage.rst` and `Documentation/sysctl/vm.rst` under Vendor docs for the NUMA-balancing/THP/overcommit knobs specifically, and `networking/rdma_v1`'s existing libfabric/RDMA background for why `memlock` needs raising.
+- **Step 11 — Rack & facilities reference material** — not yet implemented (reference material, not code) — see the "Adjacent Engineering Disciplines" appendix below, where this is filed alongside the EUV lithography material.
 
 **Background:** Gropp/Lusk/Skjellum (MPI) and Chapman/Jost/van der Pas
 (OpenMP) are the right on-ramps before steps 1-2 if the standards
@@ -807,7 +808,7 @@ Grondona (2003) Slurm.
 | Framework-native training | PyTorch docs (`torch.autograd`, `torch.compile`, `torch.distributed`, FSDP), JAX docs (`jit`/`vmap`/`pmap`/`grad`, `jax.sharding`), PyTorch Lightning docs, DeepSpeed docs, Ray Train docs |
 | Quantum computing | IBM Quantum docs (Qiskit, real-hardware job submission), AWS Braket developer guide, Azure Quantum docs, Xanadu Cloud / PennyLane / Strawberry Fields docs |
 | HPC storage | VAST Data architecture documentation (DASE, similarity-based data reduction), WekaFS documentation, Lustre operations manual, NVIDIA GPUDirect Storage (cuFile) documentation, NFS over RDMA (RFC 8166 / kernel NFSoRDMA docs), DLIO benchmark documentation, MinIO documentation |
-| HPC cluster engineering | MPI Forum *MPI Standard*, OpenMP API specification, Slurm administrator/user documentation (`HealthCheckProgram`, `sbatch`/`salloc`), Apptainer/Singularity user guide, ASHRAE thermal guidelines for data-center equipment |
+| HPC cluster engineering | MPI Forum *MPI Standard*, OpenMP API specification, Slurm administrator/user documentation (`HealthCheckProgram`, `sbatch`/`salloc`, `gres.conf`/`cgroup.conf`), Apptainer/Singularity user guide, ASHRAE thermal guidelines for data-center equipment, Linux kernel docs (`Documentation/admin-guide/mm/transparent-hugepage.rst`, `Documentation/sysctl/vm.rst`, `Documentation/sysctl/net.rst`) |
 
 ---
 

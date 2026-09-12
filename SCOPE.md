@@ -470,13 +470,14 @@ pattern Phase 19 closed for PyTorch/JAX, applied to the classic HPC
 toolchain.)*
 - Real MPI ring all-reduce (OpenMPI/MPICH via `mpic++`/`mpirun`, ask before installing), compared directly against `networking/ring_allreduce`'s hand-rolled version
 - Real OpenMP port of an existing hand-threaded kernel (`libomp` for Apple clang, ask before installing), compared against the hand-rolled thread-pool version with a measured speedup
-- Real Slurm job configs (`sbatch`/`salloc`) wrapping this repo's real long-running binaries, with local runnability verified empirically rather than assumed blocked
-- Portable node health-check tooling, mirroring Slurm's own `HealthCheckProgram` mechanism
-- Rack-level power & cooling capacity model (PUE, per-rack power budget, CRAC/CRAH tons), reusing `gpu_engine/power`/`fpga_engine/clock_gating`'s existing power numbers, same shape as `analog_engine/energy_model` scaled to rack level
+- Real, complete Slurm job configs (`slurm.conf`/`cgroup.conf`/`gres.conf` for GPU scheduling, `sbatch`/`salloc`) wrapping this repo's real long-running binaries, with real backfill/fairshare/QoS tuning actually set — written complete now assuming real Linux hardware backs it eventually, same convention as every other hardware-gated phase, local runnability verified empirically rather than assumed blocked
+- Portable node health-check tooling, wired as Slurm's real `HealthCheckProgram`
+- Rack-level power & cooling capacity model (PUE, per-rack power budget, CRAC/CRAH tons) with a real typed interface for measured wattage from `gpu_engine/power`/`fpga_engine/xadc` once either runs on real hardware, falling back to literature-grounded TDP figures until then — same shape as `analog_engine/energy_model` scaled to rack level, upgrading automatically rather than staying a permanent simulation
 - Cluster reliability/MTBF-MTTR model: node failure rate, cluster-level availability, redundancy tradeoff curve
 - Written NUMA/PCIe/network-topology node-design analysis, composing `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings
 - Written HW/SW co-debug portfolio piece consolidating this repo's own real cross-boundary bugs (raft's SIGSEGV, cocotb's DMA timing bug, PCA's float32 bug)
 - Real Apptainer/Singularity definition file, contrasted against Phase 16's Docker approach (no-daemon, no-root, direct GPU/MPI bind-mount passthrough)
+- Real, complete Linux/OS tuning scripts for AI/HPC-training throughput (NUMA balancing, transparent huge pages, memory overcommit/swappiness, RDMA/collective network buffer sysctls, `memlock` ulimit, cgroup v2 isolation feeding Slurm's containment) — extends `cpu_engine/os_tuning`'s exact script-per-knob pattern to AI-workload knobs distinct from that step's low-latency-jitter focus
 - Rack/facilities physical-integration reference material (cabling, power distribution, layout, serviceability) filed as reading-list reference, same honest treatment as the EUV material — not represented as running code
 
 ## Portfolio / Career Deliverables
