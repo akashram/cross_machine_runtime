@@ -767,6 +767,7 @@ exploded-tin-debris coating.
 - Engineering branches: Materials Science Engineering, Chemical Engineering, Nanotechnology
 - Degrees: B.S./M.S./Ph.D. in Materials Science, Chemistry, or Chemical Engineering
 - Key undergrad courses: Solid State Physics/Materials Chemistry (crystalline atomic arrangement); Thin Film Deposition & Characterization (flawless atomic layering, e.g. alternating silicon/molybdenum); Surface Science/Tribology (friction, wear, atomic-level smoothness); Transport Phenomena (tin-debris diffusion and reaction with protective hydrogen gas)
+- Real equivalent course: UMich EECS 423, *Micro/Nano Device Fabrication and Characterization* (historically the Solid-State Device Laboratory) — hands-on cleanroom fabrication (thin-film deposition, photolithography, etch) plus device characterization, the closest real course match to this item's thin-film/materials-science content
 
 ---
 
