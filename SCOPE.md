@@ -455,6 +455,29 @@ actually needs.)*
 - Storage multi-tenancy/QoS as a direct extension of `networking/multitenancy`, reframed for storage bandwidth/IOPS contention
 - DLIO-style AI I/O benchmark, run locally against this repo's real `transformer`/`data_loading` components
 - VAST access + hardware validation plan, honestly distinguishing "no hourly cloud rental exists" (vendor POC/demo program or an HPC center's deployment) from the spot-instance pattern the rest of the hardware table assumes
+- Hands-on storage tuning on a real, locally-deployable substitute (MinIO, or Ceph if Docker is available): actual knobs actually turned (erasure coding/replication, chunk size, concurrent-connection limits) under real AI-workload I/O from `data_loading`/`checkpoint` — not VAST itself, but the one step in the phase that's genuinely hands-on rather than conceptual
+
+## HPC Cluster Systems Engineering
+*(Added 2026-09-12, not in the original scope — see Phase 22 in PLAN.md.
+Cross-references `networking/ring_allreduce`/`tree_allreduce`/
+`topo_scheduler`, `cpu_engine`/`foundation`'s hand-threaded kernels, and
+`fpga_engine/pcie_latency` rather than duplicating them. Closes a gap
+against an HPC Software Engineer JD: this repo has deep from-scratch
+understanding of collectives/scheduling/threading but has never touched
+real MPI, OpenMP, Slurm, or rack-level power/cooling/reliability
+modeling — the same "hand-rolled first, framework-fluency second"
+pattern Phase 19 closed for PyTorch/JAX, applied to the classic HPC
+toolchain.)*
+- Real MPI ring all-reduce (OpenMPI/MPICH via `mpic++`/`mpirun`, ask before installing), compared directly against `networking/ring_allreduce`'s hand-rolled version
+- Real OpenMP port of an existing hand-threaded kernel (`libomp` for Apple clang, ask before installing), compared against the hand-rolled thread-pool version with a measured speedup
+- Real Slurm job configs (`sbatch`/`salloc`) wrapping this repo's real long-running binaries, with local runnability verified empirically rather than assumed blocked
+- Portable node health-check tooling, mirroring Slurm's own `HealthCheckProgram` mechanism
+- Rack-level power & cooling capacity model (PUE, per-rack power budget, CRAC/CRAH tons), reusing `gpu_engine/power`/`fpga_engine/clock_gating`'s existing power numbers, same shape as `analog_engine/energy_model` scaled to rack level
+- Cluster reliability/MTBF-MTTR model: node failure rate, cluster-level availability, redundancy tradeoff curve
+- Written NUMA/PCIe/network-topology node-design analysis, composing `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings
+- Written HW/SW co-debug portfolio piece consolidating this repo's own real cross-boundary bugs (raft's SIGSEGV, cocotb's DMA timing bug, PCA's float32 bug)
+- Real Apptainer/Singularity definition file, contrasted against Phase 16's Docker approach (no-daemon, no-root, direct GPU/MPI bind-mount passthrough)
+- Rack/facilities physical-integration reference material (cabling, power distribution, layout, serviceability) filed as reading-list reference, same honest treatment as the EUV material — not represented as running code
 
 ## Portfolio / Career Deliverables
 - `/docs`: RFCs and ADRs for scheduler, memory model, transport protocol (written as internal Google/Meta design docs)

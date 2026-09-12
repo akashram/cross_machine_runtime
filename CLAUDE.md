@@ -924,7 +924,7 @@ tuning VAST Data for AI training workloads) actually needs: real code
 already exists for the compute-side half of the storage story (the GDS
 client, offload logic, checkpoint sharding) but nothing about the
 parallel filesystem layer itself or the I/O-pattern/capacity-planning
-reasoning around it. 10 planned steps: real I/O-pattern characterization
+reasoning around it. 11 planned steps: real I/O-pattern characterization
 of the existing data-loading/checkpoint code, a small-file metadata
 bottleneck study (the real problem `webdataset_shard` already solves),
 a literature/vendor-doc-grounded comparison of VAST Data vs. WekaFS vs.
@@ -935,15 +935,53 @@ applying `networking`'s existing RDMA primitives to bulk storage traffic,
 a real checkpoint-burst ("thundering herd") capacity-planning model, a
 real data-reduction measurement on this repo's own artifacts, a
 storage-QoS extension of `networking/multitenancy`, a DLIO-style AI I/O
-benchmark run against this repo's real components, and a VAST access +
+benchmark run against this repo's real components, a VAST access +
 hardware-validation plan (no simple hourly cloud rental exists for VAST/
 WekaFS/Lustre-GPFS, unlike GPU/FPGA/TPU/QPU — a genuinely different
-access path to plan for). Steps 1, 2, 6, 7, 9 need no new hardware or
-install and should end up real, run-locally work; steps 3, 4, 5, 8, 10
-are expected to stay literature/vendor-doc-grounded and explicitly
-labeled as such. See PLAN.md's Phase 21 section and SCOPE.md's "HPC
-Storage Engineering for AI Workloads" for full detail, and
-`READING_LIST.md`'s Phase 21 section for citations ahead of any commits.
+access path to plan for), and, added after the user pointed out steps
+1-10 alone only reach conceptual fluency about VAST specifically, a
+real hands-on tuning step (step 11: MinIO, or Ceph if Docker is
+available) that actually turns knobs on a real (if not VAST-branded)
+system, since no real VAST access exists. Steps 1, 2, 6, 7, 9, 11 need
+no new hardware (11 needs an install, ask first) and should end up
+real, run-locally work; steps 3, 4, 5, 8, 10 are expected to stay
+literature/vendor-doc-grounded and explicitly labeled as such. See
+PLAN.md's Phase 21 section and SCOPE.md's "HPC Storage Engineering for
+AI Workloads" for full detail, and `READING_LIST.md`'s Phase 21 section
+for citations ahead of any commits.
+
+**Phase 22: HPC Cluster Systems Engineering — SCOPED 2026-09-12, not yet
+started.** Lives in `hpc_cluster/` (planned), cross-referencing rather
+than duplicating `networking/ring_allreduce`/`tree_allreduce`/
+`topo_scheduler`, `foundation/numa`/`ws_pool`, and
+`fpga_engine/pcie_latency`. Closes a fourth gap, found by checking the
+repo against a full HPC Software Engineer JD (MPI/OpenMP/GPU pipelines,
+Slurm-style scheduling, CPU/GPU/NUMA/PCIe node-design awareness,
+rack-level power/cooling/reliability engineering, HW/SW co-debug,
+containerized HPC runtimes): this repo has deep from-scratch
+understanding of collectives, scheduling, and threading, but has never
+called real MPI or OpenMP, never run a real cluster scheduler, and has
+no rack-level power/cooling/reliability model — the same "hand-rolled
+first, framework-fluency second" pattern Phase 19 closed for PyTorch/
+JAX, applied to the classic HPC toolchain. 10 planned steps: real MPI
+ring all-reduce compared against `networking/ring_allreduce`'s
+hand-rolled version, a real OpenMP port of a hand-threaded kernel, real
+Slurm job configs wrapping this repo's real long-running binaries
+(likely Linux-gated like Docker, verified empirically rather than
+assumed), portable node health-check tooling, a real rack-level
+power/cooling capacity model, a real cluster reliability/MTBF-MTTR
+model, a written NUMA/PCIe/topology node-design analysis composing
+existing findings, a written HW/SW co-debug portfolio piece
+consolidating this repo's own real bugs (raft's SIGSEGV, cocotb's DMA
+timing bug, PCA's float32 bug), a real Apptainer/Singularity definition
+file contrasted against Phase 16's Docker approach, and rack/facilities
+physical-integration content filed as `READING_LIST.md` reference
+material (same treatment as the EUV material) rather than code. MPI/
+OpenMP (steps 1-2) need an install decision but no cloud hardware;
+Slurm/Apptainer (steps 3, 9) are expected to need Linux, like Docker.
+See PLAN.md's Phase 22 section and SCOPE.md's "HPC Cluster Systems
+Engineering" for full detail, and `READING_LIST.md`'s Phase 22 section
+for citations ahead of any commits.
 
 ---
 
@@ -1017,7 +1055,24 @@ engineering, e.g. tuning VAST Data for AI workloads) rather than a JD
 batch. Steps 1, 2, 6, 7, 9 need no new hardware or install and can start
 immediately; steps 3, 4, 5, 8, 10 are literature/vendor-doc-grounded by
 design (no parallel filesystem exists locally or via simple cloud
-rental).
+rental). **Later the same session: user asked which of the 10 steps
+actually involve turning real knobs on a real system — honest answer
+was none — so step 11 (real hands-on MinIO/Ceph tuning) was added.**
+
+**Update 2026-09-12: Phase 22 (HPC Cluster Systems Engineering) also
+scoped, not yet implemented.** Third gap found this session, against a
+full HPC Software Engineer JD the user pasted directly (MPI/OpenMP,
+Slurm, rack power/cooling/reliability, NUMA/PCIe node design, HW/SW
+co-debug, Apptainer/Singularity) plus an explicit ask for Slurm
+specifically. Steps 1-2 (MPI, OpenMP) need only a local install
+decision, no cloud hardware. Steps 4-8 are portable, no new dependency.
+Steps 3, 9 (Slurm, Apptainer) are expected to need Linux, like Docker —
+write them real and complete, verify empirically what's actually
+blocked rather than assuming full blockage. Step 10 (rack/facilities
+physical integration) is reference material, filed in READING_LIST.md
+alongside the EUV material, not code — same honest call as that
+material, for the same reason (no way to represent physical cabling/
+cooling layout as running code).
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
@@ -1036,6 +1091,7 @@ Work through phases in the same order, one hardware type at a time.
 | Phase 12 (ML) | Any (mostly CPU) | c5.2xlarge |
 | Phase 20 (Quantum) | Real cloud QPU | IBM Quantum, AWS Braket, Azure Quantum, Xanadu Cloud (CV/photonic steps specifically) |
 | Phase 21 (HPC Storage) | Real parallel filesystem | No hourly rental — VAST Data/WekaFS/Lustre-GPFS need a vendor POC/demo program or an HPC center's existing deployment |
+| Phase 22 (HPC Cluster) | Linux (Slurm/Apptainer cgroups) — MPI/OpenMP steps need no cloud hardware at all | any Linux x86 (same as Phase 4/10) for Slurm/Apptainer steps only |
 
 ### When returning to a phase on cloud hardware
 1. SSH into the appropriate instance.

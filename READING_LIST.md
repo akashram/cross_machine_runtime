@@ -54,6 +54,10 @@ consolidated under a phase instead of a step.
   GPUDirect Storage backends, I/O-pattern tuning for AI workloads).
   Scoped, not yet implemented, cross-references existing Phase 5/6
   components rather than duplicating them.
+- **Phase 22** (added 2026-09-12, scoped in PLAN.md/SCOPE.md/CLAUDE.md)
+  closes a fourth gap found against a full HPC Software Engineer JD:
+  real MPI/OpenMP, Slurm cluster scheduling, rack-level power/cooling/
+  reliability modeling. Scoped, not yet implemented.
 
 ---
 
@@ -625,12 +629,42 @@ elsewhere in this document.
 - **Step 8 — Storage multi-tenancy / QoS** (`hpc_storage/storage_multitenancy/`) — not yet implemented: no new citation — direct extension of `networking/multitenancy`'s existing mechanism (see that step's own entry above) to a different contended resource.
 - **Step 9 — DLIO-style AI I/O benchmark** (`hpc_storage/dlio_bench/`) — not yet implemented: Devarajan, H. et al. (2021), *"DLIO: A Data-Centric Benchmark for Scientific Deep Learning Applications"* (IEEE/ACM CCGrid) — the real Argonne benchmark this step reimplements the core idea of, driven by this repo's own `transformer`/`data_loading` components.
 - **Step 10 — VAST access + hardware validation plan** (`hpc_storage/hardware_access_plan/`) — not yet implemented: no dedicated citation — a written plan, not a measurement.
+- **Step 11 — Hands-on storage tuning: MinIO (or Ceph)** (`hpc_storage/hands_on_tuning/`) — not yet implemented: no academic citation; see MinIO documentation and, if used instead, Weil et al. (2006) (same as step 3) under Vendor docs. The one step in this phase involving real, measured tuning of a real system rather than conceptual/architectural analysis.
 
 **Background:** none of steps 1-2, 6-9 need anything beyond what
 `distributed_training`'s existing components already assume; steps 3-4
 are the ones worth reading real vendor architecture documentation for
 first (VAST Data's own DASE architecture material is the most direct
 on-ramp, given step 4's specific focus).
+
+---
+
+## Phase 22: HPC Cluster Systems Engineering — SCOPED, not yet implemented
+
+**Start here:** no `hpc_cluster/README.md`/`DESIGN.md` exist yet — this
+section documents the citations behind each planned step, to be matched
+against real commits once implementation starts. Scoped 2026-09-12 (no
+commit hash yet). Cross-references `networking/ring_allreduce`/
+`tree_allreduce`/`topo_scheduler`, `foundation/numa`/`ws_pool`, and
+`fpga_engine/pcie_latency` rather than duplicating them.
+
+- **Step 1 — Real MPI collectives** (`hpc_cluster/mpi_allreduce/`) — not yet implemented: Gropp, W., Lusk, E. & Skjellum, A., *Using MPI: Portable Parallel Programming with the Message-Passing Interface* — the standard reference for the MPI programming model this step targets directly; MPI Forum, *MPI: A Message-Passing Interface Standard* — the spec itself, see Vendor docs. Compared directly against `networking/ring_allreduce`'s and `tree_allreduce`'s hand-rolled algorithms (see those steps' own entries above).
+- **Step 2 — OpenMP-native port** (`hpc_cluster/openmp_port/`) — not yet implemented: Chapman, B., Jost, G. & van der Pas, R. (2007), *Using OpenMP: Portable Shared Memory Parallel Programming* — the standard reference; OpenMP Architecture Review Board, *OpenMP Application Programming Interface* specification, see Vendor docs. Compared directly against `foundation/ws_pool`'s hand-rolled work-stealing pool.
+- **Step 3 — Slurm cluster scheduling** (`hpc_cluster/slurm_jobs/`) — not yet implemented: Yoo, A.B., Jette, M.A. & Grondona, M. (2003), *"SLURM: Simple Linux Utility for Resource Management"* (JSSPP) — the original Slurm paper.
+- **Step 4 — Cluster health-check / bring-up tooling** (`hpc_cluster/health_check/`) — not yet implemented: no academic citation — mirrors Slurm's own `HealthCheckProgram` mechanism, see Slurm administrator documentation under Vendor docs.
+- **Step 5 — Rack-level power & cooling capacity model** (`hpc_cluster/rack_power_model/`) — not yet implemented: no dedicated citation — same shape as `analog_engine/energy_model` (see that step's own entry above), scaled to rack level; ASHRAE thermal guidelines for data-center equipment are the literature source for cooling-capacity constants, see Vendor docs.
+- **Step 6 — Cluster reliability / MTBF-MTTR model** (`hpc_cluster/reliability_model/`) — not yet implemented: Trivedi, K.S., *Probability and Statistics with Reliability, Queuing, and Computer Science Applications* — the standard reference for the MTBF/MTTR/availability math this step implements; Schroeder, B. & Gibson, G.A. (2007), *"Understanding Failures in Petascale Computers"* — a real large-scale HPC failure-rate study, useful ground-truth calibration for the model's assumed per-node failure rates.
+- **Step 7 — NUMA/PCIe/topology node-design analysis** (`hpc_cluster/node_design/`) — not yet implemented: no new citation — composes `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings (see those steps' own entries above).
+- **Step 8 — HW/SW co-debug case-study consolidation** (`hpc_cluster/codebug_portfolio/`) — not yet implemented: no citation — consolidates this repo's own real bugs, see [[project_raft_test_segfault_resolved]] and the `fpga_engine/cocotb`/`ml/pca` entries above.
+- **Step 9 — Apptainer/Singularity container runtime** (`hpc_cluster/apptainer/`) — not yet implemented: Kurtzer, G.M., Sochat, V. & Bauer, M.W. (2017), *"Singularity: Scientific containers for mobility of compute"* (PLOS ONE) — the original Singularity (now Apptainer) paper, and its specific no-daemon/no-root design rationale for shared HPC clusters. Contrasted against Phase 16's Docker approach.
+- **Step 10 — Rack & facilities reference material** — not yet implemented (reference material, not code) — see the "Adjacent Engineering Disciplines" appendix below, where this is filed alongside the EUV lithography material.
+
+**Background:** Gropp/Lusk/Skjellum (MPI) and Chapman/Jost/van der Pas
+(OpenMP) are the right on-ramps before steps 1-2 if the standards
+documents alone move too fast; Schroeder & Gibson (2007) is worth
+reading before step 6 for a real sense of scale (their failure-rate
+data comes from actual large HPC/internet-service clusters, not a
+vendor's marketing MTBF number).
 
 ---
 
@@ -745,6 +779,13 @@ Weedbrook et al. (2012) Gaussian quantum information.
 (2021) DLIO benchmark · Schmuck & Haskin (2002) GPFS · Weil et al. (2006)
 Ceph.
 
+**Phase 22 additions (scoped, not yet implemented):** Chapman, Jost & van
+der Pas (2007) OpenMP · Gropp, Lusk & Skjellum, *Using MPI* · Kurtzer,
+Sochat & Bauer (2017) Singularity/Apptainer · Schroeder & Gibson (2007)
+petascale failure study · Trivedi, *Probability and Statistics with
+Reliability, Queuing, and Computer Science Applications* · Yoo, Jette &
+Grondona (2003) Slurm.
+
 ---
 
 ## Vendor docs / specs / manuals index
@@ -765,20 +806,23 @@ Ceph.
 | SciML/dynamical systems | `scipy.integrate` docs (reference ODE/SDE solver implementations to check against), `diffrax`/`torchdiffeq` docs (existing Neural-ODE libraries, useful for API-shape comparison even if not depended on) |
 | Framework-native training | PyTorch docs (`torch.autograd`, `torch.compile`, `torch.distributed`, FSDP), JAX docs (`jit`/`vmap`/`pmap`/`grad`, `jax.sharding`), PyTorch Lightning docs, DeepSpeed docs, Ray Train docs |
 | Quantum computing | IBM Quantum docs (Qiskit, real-hardware job submission), AWS Braket developer guide, Azure Quantum docs, Xanadu Cloud / PennyLane / Strawberry Fields docs |
-| HPC storage | VAST Data architecture documentation (DASE, similarity-based data reduction), WekaFS documentation, Lustre operations manual, NVIDIA GPUDirect Storage (cuFile) documentation, NFS over RDMA (RFC 8166 / kernel NFSoRDMA docs), DLIO benchmark documentation |
+| HPC storage | VAST Data architecture documentation (DASE, similarity-based data reduction), WekaFS documentation, Lustre operations manual, NVIDIA GPUDirect Storage (cuFile) documentation, NFS over RDMA (RFC 8166 / kernel NFSoRDMA docs), DLIO benchmark documentation, MinIO documentation |
+| HPC cluster engineering | MPI Forum *MPI Standard*, OpenMP API specification, Slurm administrator/user documentation (`HealthCheckProgram`, `sbatch`/`salloc`), Apptainer/Singularity user guide, ASHRAE thermal guidelines for data-center equipment |
 
 ---
 
 ## Adjacent Engineering Disciplines (career reference, not a repo phase)
 
 Encountered while researching semiconductor manufacturing equipment
-roles (EUV lithography — ASML/Zeiss-style systems engineering). Kept
-here for reference since it's a genuinely different set of engineering
-disciplines (photonics, plasma physics, precision mechatronics, vacuum
-systems, thin-film materials science) than anything buildable in this
-software-only repo — unlike Phases 17-20, this doesn't get a PLAN.md/
-SCOPE.md phase, since there's no meaningful way to represent real
-plasma/vacuum/optics physics as running code the way analog crossbar
+roles (EUV lithography — ASML/Zeiss-style systems engineering) and HPC
+Software Engineer roles with a rack/facilities component. Kept here for
+reference since these are genuinely different engineering disciplines
+(photonics, plasma physics, precision mechatronics, vacuum systems,
+thin-film materials science, physical rack/power/cooling integration)
+than anything buildable in this software-only repo — unlike Phases
+17-22, none of this gets a PLAN.md/SCOPE.md phase, since there's no
+meaningful way to represent real plasma/vacuum/optics physics or
+physical cabling/cooling layout as running code the way analog crossbar
 compute or quantum circuits can be. Logged 2026-09-12.
 
 **1. EUV Light Generation & Plasma Physics** — manipulating matter at
@@ -808,6 +852,20 @@ exploded-tin-debris coating.
 - Degrees: B.S./M.S./Ph.D. in Materials Science, Chemistry, or Chemical Engineering
 - Key undergrad courses: Solid State Physics/Materials Chemistry (crystalline atomic arrangement); Thin Film Deposition & Characterization (flawless atomic layering, e.g. alternating silicon/molybdenum); Surface Science/Tribology (friction, wear, atomic-level smoothness); Transport Phenomena (tin-debris diffusion and reaction with protective hydrogen gas)
 - Real equivalent course: UMich EECS 423, *Micro/Nano Device Fabrication and Characterization* (historically the Solid-State Device Laboratory) — hands-on cleanroom fabrication (thin-film deposition, photolithography, etch) plus device characterization, the closest real course match to this item's thin-film/materials-science content
+
+**5. Rack & Data Center Facilities Integration** — physical rack-level
+integration of HPC systems: power distribution, cooling, cabling, and
+physical layout, plus the data-center/lab constraints (power budgets,
+thermal limits, network drops, serviceability) those choices operate
+under. Filed here (Phase 22 step 10) rather than as code for the same
+reason as items 1-4: no meaningful way to represent physical cabling,
+airflow, or floor-space layout as running code — the *decisions* those
+constraints drive (how much power/cooling a rack can actually support)
+are covered instead by Phase 22 step 5's real power/cooling capacity
+model.
+- Engineering branches: Mechanical Engineering, Electrical Engineering (Power), Facilities/Data Center Engineering
+- Degrees: B.S. in Mechanical or Electrical Engineering; data-center-specific certifications (e.g. Uptime Institute, ASHRAE) more common than a dedicated undergrad degree
+- Key undergrad courses: Heat Transfer (same as EUV item 3's thermal-management content, applied to server exhaust instead of laser-induced heat); Electrical Power Systems (three-phase power distribution, PDU sizing); Fluid Mechanics (airflow/cooling design, hot-aisle/cold-aisle containment)
 
 ---
 
