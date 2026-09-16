@@ -74,3 +74,9 @@ add_subdirectory(sciml)
 # analog/neuromorphic silicon exists to gate on), pure numeric simulation.
 # See analog_engine/CMakeLists.txt.
 add_subdirectory(analog_engine)
+
+# Phase 21: HPC Storage Engineering for AI Workloads — mostly portable
+# (local-filesystem measurements standing in for a real parallel FS); step
+# 11 (MinIO) is real but toolchain-gated (no MinIO installed locally). See
+# hpc_storage/CMakeLists.txt and hpc_storage/DESIGN.md.
+add_subdirectory(hpc_storage)
