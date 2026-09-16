@@ -13,6 +13,7 @@ cmake_minimum_required(VERSION 3.25)
 add_subdirectory(state_vector)
 add_subdirectory(algorithms)
 add_subdirectory(noise_model)
+add_subdirectory(qec)
 
 # step 7 (pennylane_native/) has no CMake target: real PennyLane code,
 # unrun, same non-CMake convention as gpu_engine/triton_kernels and

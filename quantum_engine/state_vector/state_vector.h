@@ -146,6 +146,20 @@ class StateVector {
     }
   }
 
+  // Samples a single qubit's outcome from prob1(q) (Born rule), then
+  // projects and renormalizes -- a real partial (single-qubit) collapse,
+  // used e.g. by QEC's syndrome-ancilla measurement (qec.h), which must
+  // read out ancilla qubits without collapsing the data qubits' logical
+  // superposition.
+  int measure_qubit(int q, std::mt19937_64 &rng) {
+    double p1 = prob1(q);
+    std::uniform_real_distribution<double> u(0.0, 1.0);
+    int outcome = (u(rng) < p1) ? 1 : 0;
+    project_unnormalized(q, outcome);
+    renormalize();
+    return outcome;
+  }
+
   // Samples a full computational-basis outcome from |amp|^2 and collapses
   // the state vector to that basis state (renormalized to a pure |1>
   // amplitude, matching the Born rule's post-measurement state).
