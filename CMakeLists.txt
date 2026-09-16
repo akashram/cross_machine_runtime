@@ -74,3 +74,8 @@ add_subdirectory(sciml)
 # analog/neuromorphic silicon exists to gate on), pure numeric simulation.
 # See analog_engine/CMakeLists.txt.
 add_subdirectory(analog_engine)
+
+# Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — fully
+# portable (small-qubit-count state-vector simulation is exact, not a
+# stand-in; no quantum hardware to gate on). See quantum_engine/CMakeLists.txt.
+add_subdirectory(quantum_engine)
