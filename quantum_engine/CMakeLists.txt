@@ -14,6 +14,7 @@ add_subdirectory(state_vector)
 add_subdirectory(algorithms)
 add_subdirectory(noise_model)
 add_subdirectory(qec)
+add_subdirectory(vqe)
 
 # step 7 (pennylane_native/) has no CMake target: real PennyLane code,
 # unrun, same non-CMake convention as gpu_engine/triton_kernels and
