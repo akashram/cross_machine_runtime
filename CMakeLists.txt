@@ -75,6 +75,11 @@ add_subdirectory(sciml)
 # See analog_engine/CMakeLists.txt.
 add_subdirectory(analog_engine)
 
+# Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — fully
+# portable (small-qubit-count state-vector simulation is exact, not a
+# stand-in; no quantum hardware to gate on). See quantum_engine/CMakeLists.txt.
+add_subdirectory(quantum_engine)
+
 # Phase 21: HPC Storage Engineering for AI Workloads — mostly portable
 # (local-filesystem measurements standing in for a real parallel FS); step
 # 11 (MinIO) is real but toolchain-gated (no MinIO installed locally). See
