@@ -608,28 +608,35 @@ budget separate reading time for each.
 
 ---
 
-## Phase 21: HPC Storage Engineering for AI Workloads — SCOPED, not yet implemented
+## Phase 21: HPC Storage Engineering for AI Workloads — CODE COMPLETE (11/11 steps)
 
-**Start here:** no `hpc_storage/README.md`/`DESIGN.md` exist yet — this
-section documents the citations behind each planned step, to be matched
-against real commits once implementation starts. Scoped 2026-09-12 (no
-commit hash yet). Cross-references `distributed_training/gpudirect_storage`
-[`88392a5`], `distributed_training/checkpoint`, `distributed_training/
-data_loading`, and `networking/rdma_v1`/`nic_deep_dive`/`multitenancy`
-rather than duplicating them — see their own README/DESIGN entries
-elsewhere in this document.
+**Start here:** `hpc_storage/README.md` and `hpc_storage/DESIGN.md`
+(phase-level wrap-up), then each step's own README. Scoped 2026-09-12,
+implemented 2026-09-16 (this session, in a parallel git worktree
+alongside Phases 20/22 — see the top-level commit history for the merge).
+Directory names below are the REAL ones used at implementation time —
+slightly more descriptive than the scoping pass's placeholder names
+above this note originally used (e.g. `io_pattern_characterization/` not
+`io_patterns/`, `checkpoint_burst_capacity/` not `checkpoint_burst_model/`,
+`storage_qos/` not `storage_multitenancy/`, `vast_access_plan/` not
+`hardware_access_plan/`, `minio_tuning/` not `hands_on_tuning/`). Cross-
+references `distributed_training/gpudirect_storage` [`88392a5`],
+`distributed_training/checkpoint`, `distributed_training/data_loading`,
+and `networking/rdma_v1`/`nic_deep_dive`/`multitenancy` rather than
+duplicating them — see their own README/DESIGN entries elsewhere in this
+document.
 
-- **Step 1 — I/O pattern characterization** (`hpc_storage/io_patterns/`) — not yet implemented: no dedicated citation — direct instrumentation of this repo's own existing `data_loading`/`checkpoint` code.
-- **Step 2 — Small-file metadata bottleneck study** (`hpc_storage/metadata_bottleneck/`) — not yet implemented: no dedicated citation; see the WebDataset project (Breuel, T., open-source, no formal paper) under Vendor docs — the real motivation `data_loading/webdataset_shard.h` already implements a solution for.
-- **Step 3 — Parallel/distributed storage comparison** (`hpc_storage/storage_comparison/`) — not yet implemented: Weil, S.A. et al. (2006), *"Ceph: A Scalable, High-Performance Distributed File System"* (OSDI) — the one component in this comparison with a canonical academic paper; Schmuck, F. & Haskin, R. (2002), *"GPFS: A Shared-Disk File System for Large Computing Clusters"* (FAST) — the academic basis for IBM Storage Scale/GPFS. VAST Data, WekaFS, and Lustre have no equivalent peer-reviewed paper — see Vendor docs below; comparison is vendor-doc-grounded and will be labeled as such, same convention as Phase 17's NVM comparison.
-- **Step 4 — VAST DASE architecture deep dive + GDS integration** (`hpc_storage/vast_dase/`) — not yet implemented: no academic citation — see VAST Data architecture documentation under Vendor docs; extends `distributed_training/gpudirect_storage`'s existing cuFile-API code [`88392a5`] with real backend-specific context.
-- **Step 5 — NFS/RDMA storage-network tuning** (`hpc_storage/nfs_rdma_tuning/`) — not yet implemented: no new citation — applies `networking/rdma_v1`'s existing libfabric/RDMA background (see that step's own entry above) to storage traffic instead of collective messages; see NFS over RDMA (NFSoRDMA) vendor/kernel docs under Vendor docs.
-- **Step 6 — Checkpoint I/O burst capacity model** (`hpc_storage/checkpoint_burst_model/`) — not yet implemented: no dedicated citation — same queueing/throughput-model shape as `fpga_engine/pcie_latency`'s latency decomposition, applied to `distributed_training/checkpoint`'s real sharded-checkpoint sizes.
-- **Step 7 — Data reduction effectiveness on real artifacts** (`hpc_storage/data_reduction/`) — not yet implemented: no dedicated citation — a direct measurement, not a literature claim.
-- **Step 8 — Storage multi-tenancy / QoS** (`hpc_storage/storage_multitenancy/`) — not yet implemented: no new citation — direct extension of `networking/multitenancy`'s existing mechanism (see that step's own entry above) to a different contended resource.
-- **Step 9 — DLIO-style AI I/O benchmark** (`hpc_storage/dlio_bench/`) — not yet implemented: Devarajan, H. et al. (2021), *"DLIO: A Data-Centric Benchmark for Scientific Deep Learning Applications"* (IEEE/ACM CCGrid) — the real Argonne benchmark this step reimplements the core idea of, driven by this repo's own `transformer`/`data_loading` components.
-- **Step 10 — VAST access + hardware validation plan** (`hpc_storage/hardware_access_plan/`) — not yet implemented: no dedicated citation — a written plan, not a measurement.
-- **Step 11 — Hands-on storage tuning: MinIO (or Ceph)** (`hpc_storage/hands_on_tuning/`) — not yet implemented: no academic citation; see MinIO documentation and, if used instead, Weil et al. (2006) (same as step 3) under Vendor docs. The one step in this phase involving real, measured tuning of a real system rather than conceptual/architectural analysis.
+- **Step 1 — I/O pattern characterization** (`hpc_storage/io_pattern_characterization/`): no dedicated citation — direct measurement of this repo's own real `data_loading`/`checkpoint` code (application-request-level, plus a direct USTAR-block-format scan; no `fs_usage`/dtrace access in this sandboxed environment). Real finding: 1600 uniform 4096-byte read requests vs. exactly one 4MB sequential checkpoint write — the read/write I/O-shape asymmetry steps 2 and 6 build on.
+- **Step 2 — Small-file metadata bottleneck study** (`hpc_storage/small_file_bottleneck/`): no dedicated citation; see the WebDataset project (Breuel, T., open-source, no formal paper) under Vendor docs — the real motivation `data_loading/webdataset_shard.h` already implements a solution for. Real bug caught and fixed before capturing results: the first version's read-path comparison used a metadata-only `stat` call instead of a real content read, an apples-to-oranges bug that (combined with an unreserved `std::vector` under the debug/`-O0` preset) produced a misleadingly reversed result; fixed and re-measured under `--preset release`, giving a real 19.63x write / 11.69x read speedup for one shard vs. 5000 small files, and a 5000x `open()`-call-count gap.
+- **Step 3 — Parallel/distributed storage comparison** (`hpc_storage/storage_comparison/`): Weil, S.A. et al. (2006), *"Ceph: A Scalable, High-Performance Distributed File System"* (OSDI) — the one component in this comparison with a canonical academic paper; Schmuck, F. & Haskin, R. (2002), *"GPFS: A Shared-Disk File System for Large Computing Clusters"* (FAST) — the academic basis for IBM Storage Scale/GPFS. VAST Data, WekaFS, and Lustre have no equivalent peer-reviewed paper — see Vendor docs below; comparison is vendor-doc-grounded and explicitly labeled as such, same convention as Phase 17's NVM comparison.
+- **Step 4 — VAST DASE architecture deep dive + GDS integration** (`hpc_storage/vast_dase_gds/`): no academic citation — see VAST Data architecture documentation under Vendor docs; extends `distributed_training/gpudirect_storage`'s existing cuFile-API code [`88392a5`] with real backend-specific context. Written analysis, no code (see that step's own README for why).
+- **Step 5 — NFS/RDMA storage-network tuning** (`hpc_storage/nfs_rdma_tuning/`): no new citation — applies `networking/rdma_v1`'s existing libfabric/RDMA background (see that step's own entry above) to storage traffic instead of collective messages; see NFS over RDMA (NFSoRDMA, RFC 8267) and RoCEv2 vendor/kernel docs under Vendor docs. Written analysis, no code.
+- **Step 6 — Checkpoint I/O burst capacity model** (`hpc_storage/checkpoint_burst_capacity/`): no dedicated citation — same queueing/throughput-model shape as `fpga_engine/pcie_latency`'s latency decomposition, applied to `distributed_training/checkpoint`'s real, unmodified `AsyncCheckpointWriter` run N-way concurrently. Real finding: aggregate write efficiency collapses from 0.537 (N=1) to 0.052 (N=8) on this Mac's one physical SSD — real, measured contention, not a modeled estimate.
+- **Step 7 — Data reduction effectiveness on real artifacts** (`hpc_storage/data_reduction/`): no dedicated citation — a direct zlib measurement on a real trained `transformer/` model's checkpoint weight, tokenized data, raw text, and embeddings. Real finding: compression ratio varies 1.065x-8.186x (7.5x spread) across four artifact types from the SAME trained model — trained weights and activations compress far worse than text, confirming "global data reduction" is not one uniform ratio.
+- **Step 8 — Storage multi-tenancy / QoS** (`hpc_storage/storage_qos/`): no new citation — direct extension of `networking/multitenancy`'s existing, unmodified `FairScheduler` (see that step's own entry above) with a bandwidth token-bucket for a different contended resource (bytes/sec, not task count).
+- **Step 9 — DLIO-style AI I/O benchmark** (`hpc_storage/dlio_bench/`): Devarajan, H. et al. (2021), *"DLIO: A Data-Centric Benchmark for Scientific Deep Learning Applications"* (IEEE/ACM CCGrid) — the real Argonne benchmark this step reimplements the core idea of, driven by this repo's own real `transformer`/`data_loading` components. Real finding, caught by running the test: this step's original "more prefetch workers never hurts" assertion failed on a real measurement — I/O is cheap enough relative to compute on this workload that overlap efficiency clusters near 1.0 across every worker count with no clean monotonic trend; the assertion was rewritten to check what's actually robust rather than forcing an assumed direction.
+- **Step 10 — VAST access + hardware validation plan** (`hpc_storage/vast_access_plan/`): no dedicated citation — a written plan, not a measurement.
+- **Step 11 — Hands-on storage tuning: MinIO** (`hpc_storage/minio_tuning/`): no academic citation; see MinIO documentation under Vendor docs. MinIO was NOT installed this session (the user explicitly declined all four install offers, including MinIO — see project memory) — `deploy_minio.sh`/`tune_and_measure.sh` are real, complete, unrun commands; the portable load-generator (`minio_load_gen`, real WebDataset/checkpoint codecs) is real, compiled, and run.
 
 **Background:** none of steps 1-2, 6-9 need anything beyond what
 `distributed_training`'s existing components already assume; steps 3-4
