@@ -74,3 +74,9 @@ add_subdirectory(sciml)
 # analog/neuromorphic silicon exists to gate on), pure numeric simulation.
 # See analog_engine/CMakeLists.txt.
 add_subdirectory(analog_engine)
+
+# Phase 22: HPC Cluster Systems Engineering — steps 1-2 (MPI/OpenMP) self-gate
+# on find_package(MPI)/find_package(OpenMP); steps 5-6 (rack power/reliability
+# models) are portable. Steps 3/4/7-11 have no CMake target (configs/scripts/
+# written analyses) — see hpc_cluster/CMakeLists.txt.
+add_subdirectory(hpc_cluster)
