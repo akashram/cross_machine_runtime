@@ -646,26 +646,29 @@ on-ramp, given step 4's specific focus).
 
 ---
 
-## Phase 22: HPC Cluster Systems Engineering — SCOPED, not yet implemented
+## Phase 22: HPC Cluster Systems Engineering — CODE COMPLETE (11/11 steps)
 
-**Start here:** no `hpc_cluster/README.md`/`DESIGN.md` exist yet — this
-section documents the citations behind each planned step, to be matched
-against real commits once implementation starts. Scoped 2026-09-12 (no
-commit hash yet). Cross-references `networking/ring_allreduce`/
-`tree_allreduce`/`topo_scheduler`, `foundation/numa`/`ws_pool`, and
-`fpga_engine/pcie_latency` rather than duplicating them.
+**Start here:** `hpc_cluster/README.md` and `hpc_cluster/DESIGN.md`
+(phase-level wrap-up, `18f86bd`), then each step's own README:
+`mpi_allreduce/`, `openmp_port/`, `slurm_jobs/`, `health_check/`,
+`rack_power_model/`, `reliability_model/`, `node_design/`,
+`codebug_portfolio/`, `apptainer/`, `os_tuning_ai/`. Scoped 2026-09-12
+(`5fd8a07`), implemented 2026-09-16. Cross-references
+`networking/ring_allreduce`/`tree_allreduce`/`topo_scheduler`,
+`foundation/numa`/`ws_pool`, and `fpga_engine/pcie_latency` rather than
+duplicating them.
 
-- **Step 1 — Real MPI collectives** (`hpc_cluster/mpi_allreduce/`) — not yet implemented: Gropp, W., Lusk, E. & Skjellum, A., *Using MPI: Portable Parallel Programming with the Message-Passing Interface* — the standard reference for the MPI programming model this step targets directly; MPI Forum, *MPI: A Message-Passing Interface Standard* — the spec itself, see Vendor docs. Compared directly against `networking/ring_allreduce`'s and `tree_allreduce`'s hand-rolled algorithms (see those steps' own entries above).
-- **Step 2 — OpenMP-native port** (`hpc_cluster/openmp_port/`) — not yet implemented: Chapman, B., Jost, G. & van der Pas, R. (2007), *Using OpenMP: Portable Shared Memory Parallel Programming* — the standard reference; OpenMP Architecture Review Board, *OpenMP Application Programming Interface* specification, see Vendor docs. Compared directly against `foundation/ws_pool`'s hand-rolled work-stealing pool.
-- **Step 3 — Slurm cluster scheduling** (`hpc_cluster/slurm_jobs/`) — not yet implemented: Yoo, A.B., Jette, M.A. & Grondona, M. (2003), *"SLURM: Simple Linux Utility for Resource Management"* (JSSPP) — the original Slurm paper.
-- **Step 4 — Cluster health-check / bring-up tooling** (`hpc_cluster/health_check/`) — not yet implemented: no academic citation — mirrors Slurm's own `HealthCheckProgram` mechanism, see Slurm administrator documentation under Vendor docs.
-- **Step 5 — Rack-level power & cooling capacity model** (`hpc_cluster/rack_power_model/`) — not yet implemented: no dedicated citation — same shape as `analog_engine/energy_model` (see that step's own entry above), scaled to rack level; ASHRAE thermal guidelines for data-center equipment are the literature source for cooling-capacity constants, see Vendor docs.
-- **Step 6 — Cluster reliability / MTBF-MTTR model** (`hpc_cluster/reliability_model/`) — not yet implemented: Trivedi, K.S., *Probability and Statistics with Reliability, Queuing, and Computer Science Applications* — the standard reference for the MTBF/MTTR/availability math this step implements; Schroeder, B. & Gibson, G.A. (2007), *"Understanding Failures in Petascale Computers"* — a real large-scale HPC failure-rate study, useful ground-truth calibration for the model's assumed per-node failure rates.
-- **Step 7 — NUMA/PCIe/topology node-design analysis** (`hpc_cluster/node_design/`) — not yet implemented: no new citation — composes `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings (see those steps' own entries above).
-- **Step 8 — HW/SW co-debug case-study consolidation** (`hpc_cluster/codebug_portfolio/`) — not yet implemented: no citation — consolidates this repo's own real bugs, see [[project_raft_test_segfault_resolved]] and the `fpga_engine/cocotb`/`ml/pca` entries above.
-- **Step 9 — Apptainer/Singularity container runtime** (`hpc_cluster/apptainer/`) — not yet implemented: Kurtzer, G.M., Sochat, V. & Bauer, M.W. (2017), *"Singularity: Scientific containers for mobility of compute"* (PLOS ONE) — the original Singularity (now Apptainer) paper, and its specific no-daemon/no-root design rationale for shared HPC clusters. Contrasted against Phase 16's Docker approach.
-- **Step 10 — Linux/OS tuning for HPC AI workloads** (`hpc_cluster/os_tuning_ai/`) — not yet implemented: no dedicated academic citation — extends `cpu_engine/os_tuning`'s exact pattern (see that step's own entry above) to AI/HPC-training-throughput sysctls/ulimits instead of low-latency-jitter ones; see the Linux kernel's `Documentation/admin-guide/mm/transparent-hugepage.rst` and `Documentation/sysctl/vm.rst` under Vendor docs for the NUMA-balancing/THP/overcommit knobs specifically, and `networking/rdma_v1`'s existing libfabric/RDMA background for why `memlock` needs raising.
-- **Step 11 — Rack & facilities reference material** — not yet implemented (reference material, not code) — see the "Adjacent Engineering Disciplines" appendix below, where this is filed alongside the EUV lithography material.
+- **Step 1 — Real MPI collectives** (`hpc_cluster/mpi_allreduce/`) [`9db2e96`]: Gropp, W., Lusk, E. & Skjellum, A., *Using MPI: Portable Parallel Programming with the Message-Passing Interface* — the standard reference for the MPI programming model this step targets directly; MPI Forum, *MPI: A Message-Passing Interface Standard* — the spec itself, see Vendor docs. Reimplements `networking/ring_allreduce`'s exact chunk-ownership convention via real `MPI_Sendrecv`, compared against `MPI_Allreduce`. Code-complete, toolchain-gated (unrun): `brew info open-mpi` confirmed a real, current formula exists; not installed this session (declined, no-new-installs policy).
+- **Step 2 — OpenMP-native port** (`hpc_cluster/openmp_port/`) [`9db2e96`]: Chapman, B., Jost, G. & van der Pas, R. (2007), *Using OpenMP: Portable Shared Memory Parallel Programming* — the standard reference; OpenMP Architecture Review Board, *OpenMP Application Programming Interface* specification, see Vendor docs. Compared directly against `foundation/ws_pool`'s hand-rolled work-stealing pool. Real finding: caught and fixed a debug-build (`-O0`) loop-shape measurement artifact that produced a nonsensical 3.66x "speedup" for genuinely serial code; re-measured under `--preset release` to a believable, sub-linear 3.0-3.2x `WorkStealingPool` speedup on 4 threads. OpenMP's own parallel path stays toolchain-gated (no `libomp` installed, declined this session).
+- **Step 3 — Slurm cluster scheduling** (`hpc_cluster/slurm_jobs/`) [`fee508e`]: Yoo, A.B., Jette, M.A. & Grondona, M. (2003), *"SLURM: Simple Linux Utility for Resource Management"* (JSSPP) — the original Slurm paper. Real, complete `slurm.conf`/`cgroup.conf`/`gres.conf` plus `sbatch` scripts wrapping `distributed_training/training_worker` and `inference_serving`'s `serving_daemon`, with backfill/fairshare/QoS parameters set and justified. Code-complete, toolchain-gated: this session's `brew search slurm` empirically found real Slurm has NO Homebrew formula on macOS at all (the name collides with an unrelated network-monitoring tool) — a harder gate than steps 1/2/9.
+- **Step 4 — Cluster health-check / bring-up tooling** (`hpc_cluster/health_check/`) [`fee508e`]: no academic citation — mirrors Slurm's own `HealthCheckProgram` mechanism, see Slurm administrator documentation under Vendor docs. Complete and run locally, both the healthy and failure paths. Real bug caught and fixed: `--self-test`'s synthetic failure injection via a one-shot env-var prefix had no effect (the threshold was read from an already-evaluated script-level variable); fixed by making it an explicit function argument.
+- **Step 5 — Rack-level power & cooling capacity model** (`hpc_cluster/rack_power_model/`) [`64f4f26`]: no dedicated citation — same shape as `analog_engine/energy_model` (see that step's own entry above), scaled to rack level; ASHRAE thermal guidelines for data-center equipment are the literature source for cooling-capacity constants, see Vendor docs. Complete and run locally. Real typed `WattageReader` interface, TDP fallback constants reused unchanged from `analog_engine/energy_model.h`; explicit test confirms the model consumes a real measured value over its TDP fallback when supplied, and correctly falls back when a reader returns no reading.
+- **Step 6 — Cluster reliability / MTBF-MTTR model** (`hpc_cluster/reliability_model/`) [`64f4f26`]: Trivedi, K.S., *Probability and Statistics with Reliability, Queuing, and Computer Science Applications* — the standard reference for the MTBF/MTTR/availability math this step implements; Schroeder, B. & Gibson, G.A. (2007), *"Understanding Failures in Petascale Computers"* — a real large-scale HPC failure-rate study, used for ground-truth calibration. Complete and run locally, verified against multiple independent hand-computed closed forms. Real finding: a 100-node cluster with per-node MTBF=100,000h (~11 years) still sees some node fail roughly every 6 weeks at cluster scale.
+- **Step 7 — NUMA/PCIe/topology node-design analysis** (`hpc_cluster/node_design/`) [`5af5c10`]: no new citation — composes `foundation/numa`, `fpga_engine/pcie_latency`, and `networking/topo_scheduler`'s existing findings (see those steps' own entries above) into an explicit three-tier "how would I spec an HPC node" argument.
+- **Step 8 — HW/SW co-debug case-study consolidation** (`hpc_cluster/codebug_portfolio/`) [`5af5c10`]: no citation — consolidates this repo's own real bugs, see [[project_raft_test_segfault_resolved]] and the `fpga_engine/cocotb`/`ml/pca` entries above. Written portfolio piece spanning three genuinely different boundary types (software/OS thread-lifetime, software/hardware-timing, software/numerics).
+- **Step 9 — Apptainer/Singularity container runtime** (`hpc_cluster/apptainer/`) [`18f86bd`]: Kurtzer, G.M., Sochat, V. & Bauer, M.W. (2017), *"Singularity: Scientific containers for mobility of compute"* (PLOS ONE) — the original Singularity (now Apptainer) paper, and its specific no-daemon/no-root design rationale for shared HPC clusters. Contrasted against Phase 16's Docker approach via an identical build target. Code-complete, toolchain-gated: `brew info apptainer` confirmed a real, current formula exists (unlike Slurm), but its own description says "for Linux" — real container execution needs Linux user namespaces regardless of the install decision.
+- **Step 10 — Linux/OS tuning for HPC AI workloads** (`hpc_cluster/os_tuning_ai/`) [`18f86bd`]: no dedicated academic citation — extends `cpu_engine/os_tuning`'s exact pattern (see that step's own entry above) to AI/HPC-training-throughput sysctls/ulimits instead of low-latency-jitter ones; see the Linux kernel's `Documentation/admin-guide/mm/transparent-hugepage.rst` and `Documentation/sysctl/vm.rst` under Vendor docs for the NUMA-balancing/THP/overcommit knobs specifically, and `networking/rdma_v1`'s existing libfabric/RDMA background for why `memlock` needs raising. The read-only detection half runs and is captured on this Mac today; live tuning is Linux-gated.
+- **Step 11 — Rack & facilities reference material** — reference material, not code — see the "Adjacent Engineering Disciplines" appendix below (item 5), where this is filed alongside the EUV lithography material.
 
 **Background:** Gropp/Lusk/Skjellum (MPI) and Chapman/Jost/van der Pas
 (OpenMP) are the right on-ramps before steps 1-2 if the standards
@@ -787,7 +790,7 @@ Weedbrook et al. (2012) Gaussian quantum information.
 (2021) DLIO benchmark · Schmuck & Haskin (2002) GPFS · Weil et al. (2006)
 Ceph.
 
-**Phase 22 additions (scoped, not yet implemented):** Chapman, Jost & van
+**Phase 22 additions:** Chapman, Jost & van
 der Pas (2007) OpenMP · Gropp, Lusk & Skjellum, *Using MPI* · Kurtzer,
 Sochat & Bauer (2017) Singularity/Apptainer · Schroeder & Gibson (2007)
 petascale failure study · Trivedi, *Probability and Statistics with
@@ -865,7 +868,7 @@ exploded-tin-debris coating.
 integration of HPC systems: power distribution, cooling, cabling, and
 physical layout, plus the data-center/lab constraints (power budgets,
 thermal limits, network drops, serviceability) those choices operate
-under. Filed here (Phase 22 step 10) rather than as code for the same
+under. Filed here (Phase 22 step 11) rather than as code for the same
 reason as items 1-4: no meaningful way to represent physical cabling,
 airflow, or floor-space layout as running code — the *decisions* those
 constraints drive (how much power/cooling a rack can actually support)

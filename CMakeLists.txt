@@ -80,3 +80,9 @@ add_subdirectory(analog_engine)
 # 11 (MinIO) is real but toolchain-gated (no MinIO installed locally). See
 # hpc_storage/CMakeLists.txt and hpc_storage/DESIGN.md.
 add_subdirectory(hpc_storage)
+
+# Phase 22: HPC Cluster Systems Engineering — steps 1-2 (MPI/OpenMP) self-gate
+# on find_package(MPI)/find_package(OpenMP); steps 5-6 (rack power/reliability
+# models) are portable. Steps 3/4/7-11 have no CMake target (configs/scripts/
+# written analyses) — see hpc_cluster/CMakeLists.txt.
+add_subdirectory(hpc_cluster)
