@@ -2,9 +2,9 @@
 
 Goal: get to "can explain it out loud, unscripted" on every phase of
 `cross_machine_runtime`, without ever spending more than 30 minutes in one
-sitting. **257 days total** (~1 year at 5x/week, less if you go 7x/week or
+sitting. **291 days total** (~1 year at 5x/week, less if you go 7x/week or
 double up on light days). Order follows the repo's own build order
-(Phase 1 → 19), so later days' "why it matters" notes assume you've seen
+(Phase 1 → 22), so later days' "why it matters" notes assume you've seen
 the earlier phases.
 
 **Daily routine (pick whichever fits the day's entry):**
@@ -432,7 +432,74 @@ Actually run in a real `.venv` (torch/jax/ray installed).
 
 ---
 
-## Day 256 — Capstone
+## Phase 20: Quantum Computing (`quantum_engine/`) — Days 256-266
+Zero hardware gate for 9/10 steps — small-qubit-count state-vector
+simulation is exact, not a stand-in. `pennylane_native` is toolchain-gated
+(install declined this session).
+
+| Day | Dir | Read/do | Why it matters |
+|---|---|---|---|
+| 256 | `state_vector` | Hand-rolled 2^n-amplitude state-vector simulator | Bell/GHZ/teleportation checked exact; unitarity preserved to numerical precision |
+| 257 | `algorithms` | Deutsch-Jozsa, Grover, QFT | Grover's O(sqrt(N)) verified exactly against brute force; caught a real Grover-periodicity test-design bug |
+| 258 | `noise_model` | Monte Carlo depolarizing/amplitude-damping channels | Fidelity degradation vs. circuit depth and noise strength |
+| 259 | `qec` | 3-qubit bit-flip repetition code | Logical error rate matches the analytic 3p²-2p³ curve |
+| 260 | `vqe` | Parameter-shift gradient descent ansatz | Checked against exact diagonalization; real power-iteration normalization bug caught and fixed; found a real ansatz-expressibility ceiling |
+| 261 | `qaoa` | MaxCut vs. classical brute force | Found a real learning-rate instability — an honest finding, not a fabricated quantum-advantage win |
+| 262 | `pennylane_native` | PennyLane VQE/QAOA reimplementation | Real, syntax-checked, left unrun — PennyLane install declined this session |
+| 263 | `cv_photonic` | Hand-rolled Gaussian-state CV/photonic primitives | Covariance-matrix linear algebra, no Strawberry Fields dependency needed; checked against closed-form results |
+| 264 | `qpu_backend` | Additive `Backend::QPU` in `inference_serving/serving_backend` | `available=false` + honest reason string, mirrors Phase 15's NPU registration |
+| 265 | `cost_model` | Cloud QPU provider/cost landscape | IBM Quantum/AWS Braket/Azure Quantum/Xanadu Cloud, literature-grounded, no fabricated composite score |
+| 266 | *(synthesis)* | — | Compare `qpu_backend`'s registration against `npu_engine` step 7's — same pattern, note what differs |
+
+---
+
+## Phase 21: HPC Storage Engineering (`hpc_storage/`) — Days 267-278
+Steps 1, 2, 6-9 and `minio_tuning`'s load-gen half actually run locally;
+steps 3-5, 10 are literature-grounded by design; `minio_tuning`'s
+deploy/tune scripts are toolchain-gated (install declined this session).
+
+| Day | Dir | Read/do | Why it matters |
+|---|---|---|---|
+| 267 | `io_pattern_characterization` | Real I/O-pattern measurement of `data_loading`/`checkpoint` | Grounds every later step in a real measured profile, not an assumed one |
+| 268 | `small_file_bottleneck` | Many-small-files vs. `webdataset_shard` | 19.63x/11.69x real speedup; real bug caught — the read-path comparison originally used a metadata-only stat instead of a real content read |
+| 269 | `storage_comparison` | VAST vs. WekaFS vs. Lustre/GPFS vs. Ceph | Literature-grounded, honestly labeled, same convention as `analog_engine/nvm_comparison` |
+| 270 | `vast_dase_gds` | VAST DASE architecture + GDS integration | Connects directly to `distributed_training/gpudirect_storage`'s existing cuFile client |
+| 271 | `nfs_rdma_tuning` | NFSoRDMA/RoCE tuning analysis | Applies `networking/rdma_v1`'s primitives to bulk storage traffic instead of small latency-sensitive messages |
+| 272 | `checkpoint_burst_capacity` | N-way checkpoint "thundering herd" model | Real contention modeling: efficiency drops 0.537→0.052 as ranks checkpoint simultaneously |
+| 273 | `data_reduction` | Real compression on this repo's own artifacts | 1.065x-8.186x depending on artifact type — not a uniform assumed ratio |
+| 274 | `storage_qos` | Storage bandwidth/IOPS fairness | Direct extension of `networking/multitenancy::FairScheduler` |
+| 275 | `dlio_bench` | DLIO-style AI I/O benchmark | Real DataLoader+transformer interleave; real bug caught — the original assertion wrongly assumed more prefetch workers always help |
+| 276 | `vast_access_plan` | VAST hardware-validation access plan | A genuinely different access gap than GPU/FPGA/TPU spot rental — vendor POC or HPC center needed |
+| 277 | `minio_tuning` | Real MinIO deploy/tune scripts | Toolchain-gated, unrun — MinIO install declined this session; load-gen half still runs for real |
+| 278 | *(synthesis)* | — | Compare `storage_qos`'s extension pattern against `qpu_backend`'s additive-registration pattern from Phase 20 — same "extend without modifying" discipline |
+
+---
+
+## Phase 22: HPC Cluster Systems Engineering (`hpc_cluster/`) — Days 279-290
+Steps 4-8 (health-check, rack power, reliability, node design, co-debug
+portfolio) actually run/checked locally; steps 1-3, 9-10 are real but
+toolchain/Linux-gated (MPI/OpenMP installs declined this session; Slurm/
+Apptainer/most sysctls need Linux, verified empirically not assumed);
+step 11 is reference material filed in `READING_LIST.md`, not code.
+
+| Day | Dir | Read/do | Why it matters |
+|---|---|---|---|
+| 279 | `mpi_allreduce` | Real MPI ring all-reduce vs. `networking/ring_allreduce` | Toolchain-gated, unrun — MPI install declined this session |
+| 280 | `openmp_port` | OpenMP port of a hand-threaded kernel | Toolchain-gated, but the comparison harness against `foundation`'s `WorkStealingPool` ran for real: 3.0-3.2x on 4 threads |
+| 281 | `slurm_jobs` | Real `slurm.conf`/`cgroup.conf`/`gres.conf` + `sbatch` scripts | Real, justified backfill/fairshare/QoS params; empirically confirmed no macOS Slurm formula exists |
+| 282 | `health_check` | Node health-check wired as Slurm's real `HealthCheckProgram` | Actually runs locally; one real self-test bug caught and fixed |
+| 283 | `rack_power_model` | Rack power/cooling capacity model | Real typed interface for measured wattage, falls back to literature TDP — same "upgrades automatically" shape as the rest of the repo |
+| 284 | `reliability_model` | Cluster MTBF/MTTR/availability model | Real math, run locally |
+| 285 | `node_design` | NUMA/PCIe/topology node-design analysis | Composes `foundation/numa`, `fpga_engine/pcie_latency`, `networking/topo_scheduler`'s separate findings |
+| 286 | `codebug_portfolio` | HW/SW co-debug case-study consolidation | Pulls together raft's SIGSEGV, cocotb's DMA timing bug, `ml/pca`'s float32 bug — no new code, just honest consolidation |
+| 287 | `apptainer` | Apptainer definition vs. Phase 16's Docker approach | Confirmed installable-but-Linux-gated on this Mac, not assumed blocked |
+| 288 | `os_tuning_ai` | Linux/OS AI-workload tuning scripts | Extends `cpu_engine/os_tuning`'s pattern to throughput knobs instead of latency-jitter ones; read-only half run locally |
+| 289 | *(reference)* | `READING_LIST.md`'s rack/facilities appendix | Not code, same honest call as the EUV material |
+| 290 | *(synthesis)* | — | `codebug_portfolio` just retold 3 bugs you've already read about elsewhere in this plan — which one would you tell an interviewer first, and why? |
+
+---
+
+## Day 291 — Capstone
 Re-read CLAUDE.md's "Where we are" section top to bottom, now that you've
 seen the code behind almost every line of it. Write your own 3-sentence
 summary of the whole project, in your own words, as if explaining it to
