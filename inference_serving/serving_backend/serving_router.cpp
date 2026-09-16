@@ -9,6 +9,7 @@ const char *to_string(Backend b) {
     case Backend::FPGA: return "fpga";
     case Backend::TPU: return "tpu";
     case Backend::NPU: return "npu";
+    case Backend::QPU: return "qpu";
   }
   return "unknown";
 }
@@ -35,10 +36,12 @@ bool qualifies(const std::unordered_map<Backend, BackendInfo> &infos, const std:
 
 RouteResult ServingRouter::route(Backend preferred, const transformer::ModelParams &model, const std::vector<int> &prompt,
                                   int max_new_tokens) const {
-  // NPU last: inference-only, edge/mobile-first, restricted-operator-model
-  // hardware (see serving_router.h's header comment) — the least-preferred
-  // fallback among the four accelerator backends, not a peer of GPU/TPU/FPGA.
-  static const Backend kPriorityOrder[] = {Backend::GPU, Backend::TPU, Backend::FPGA, Backend::NPU, Backend::CPU};
+  // NPU then QPU last: NPU is inference-only, edge/mobile-first,
+  // restricted-operator-model hardware, not a peer of GPU/TPU/FPGA; QPU
+  // is a step further still (probabilistic, queue-scheduled, no natural
+  // token-generation semantics) — see serving_router.h's header comment.
+  static const Backend kPriorityOrder[] = {Backend::GPU, Backend::TPU, Backend::FPGA,
+                                            Backend::NPU, Backend::QPU, Backend::CPU};
 
   Backend chosen = preferred;
   bool fell_back = false;

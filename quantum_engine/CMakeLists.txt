@@ -17,6 +17,7 @@ add_subdirectory(qec)
 add_subdirectory(vqe)
 add_subdirectory(qaoa)
 add_subdirectory(cv_photonic)
+add_subdirectory(qpu_backend)
 
 # step 7 (pennylane_native/) has no CMake target: real PennyLane code,
 # unrun, same non-CMake convention as gpu_engine/triton_kernels and

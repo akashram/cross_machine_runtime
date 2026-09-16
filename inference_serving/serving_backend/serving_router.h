@@ -30,10 +30,23 @@
 // npu_engine/op_coverage), not a general datacenter accelerator the way
 // GPU/TPU/FPGA are treated here, so it's the least-preferred fallback
 // rather than competing with them for priority.
+//
+// QPU added 2026-09-16 (PLAN.md Phase 20 step 9 / SCOPE.md's "QPU
+// backend registered in the runtime's device-dispatch pattern" note):
+// placed LAST, after NPU — the same "real, honestly-unavailable entry"
+// treatment, but a QPU is a step further from a peer of GPU/TPU/FPGA/NPU
+// than NPU itself is: it's probabilistic (shot-based sampling, not a
+// deterministic forward pass), queue-scheduled on a remote cloud service
+// rather than a local accelerator card, and has no token-generation
+// semantics at all (a `GenerateFn` doesn't naturally describe "submit a
+// circuit, get back measurement counts") — see
+// quantum_engine/qpu_backend/ for the real (simulator-backed) code path
+// that DOES fit a QPU's actual call shape, kept separate from this
+// token-generation-shaped router rather than forced into it.
 
 namespace inference_serving {
 
-enum class Backend { CPU, GPU, FPGA, TPU, NPU };
+enum class Backend { CPU, GPU, FPGA, TPU, NPU, QPU };
 
 const char *to_string(Backend b);
 
