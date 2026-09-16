@@ -883,8 +883,8 @@ See `READING_LIST.md` for the full citation list backing all three phases
 (analog/PPA-modeling papers, SciML/unconventional-architecture papers,
 PyTorch/JAX framework references).
 
-**Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — SCOPED
-2026-09-12, not yet started.** Lives in `quantum_engine/` (planned).
+**Phase 20: Quantum Computing & Hybrid Quantum-Classical Compute — CODE
+COMPLETE (10/10 steps, 2026-09-16).** Lives in `quantum_engine/`.
 Unlike Phases 17-19's JD-gap-analysis origin, this one closes a
 different kind of gap: the repo has zero quantum computing content, a
 fully separate compute paradigm from everything in Phases 1-19
@@ -911,11 +911,31 @@ QPU access (Xanadu Cloud most directly, for the CV/photonic steps) as
 the eventual hardware-validation step rather than a blocking
 prerequisite for the rest of the phase. See PLAN.md's Phase 20 section
 and SCOPE.md's "Quantum Computing & Hybrid Quantum-Classical Compute"
-for full detail, and `READING_LIST.md`'s Phase 20 section for citations
-ahead of any commits.
+for full detail. **Built 2026-09-16:** all 10 steps real and, except
+step 7, actually run locally — hand-rolled state-vector simulator
+(Bell/GHZ/teleportation exact), Deutsch-Jozsa/Grover/QFT (Grover's
+O(sqrt(N)) verified exactly against brute force, one real Grover-
+periodicity test-design bug caught and fixed), a Monte-Carlo
+depolarizing/amplitude-damping noise model, the 3-qubit bit-flip code
+(measured logical error matches the analytic `3p²-2p³` curve), VQE
+checked against exact diagonalization (one real power-iteration
+normalization bug caught and fixed; also found a real ansatz-
+expressibility ceiling), QAOA vs. classical brute force on MaxCut (found
+a real learning-rate instability, an honest finding not a fabricated
+win), a PennyLane reimplementation of VQE/QAOA (real, syntax-checked,
+left unrun — PennyLane install declined this session), hand-rolled CV/
+photonic primitives via covariance-matrix linear algebra (no Strawberry
+Fields dependency needed, checked against closed-form Gaussian-state
+results), an additive `Backend::QPU` registered in
+`inference_serving/serving_backend`'s `ServingRouter` (`available=false`
++ honest reason string, verified zero regression to existing router
+tests), and a literature-grounded cloud QPU provider/cost comparison
+(IBM Quantum/AWS Braket/Azure Quantum/Xanadu Cloud, no fabricated
+composite score). See `quantum_engine/README.md`/`DESIGN.md` for the
+full per-step writeup.
 
-**Phase 21: HPC Storage Engineering for AI Workloads — SCOPED
-2026-09-12, not yet started.** Lives in `hpc_storage/` (planned),
+**Phase 21: HPC Storage Engineering for AI Workloads — CODE COMPLETE
+(11/11 steps, 2026-09-16).** Lives in `hpc_storage/`,
 cross-referencing rather than duplicating
 `distributed_training/gpudirect_storage`/`checkpoint`/`data_loading` and
 `networking/rdma_v1`/`nic_deep_dive`/`multitenancy`. Closes a gap found
@@ -947,11 +967,26 @@ no new hardware (11 needs an install, ask first) and should end up
 real, run-locally work; steps 3, 4, 5, 8, 10 are expected to stay
 literature/vendor-doc-grounded and explicitly labeled as such. See
 PLAN.md's Phase 21 section and SCOPE.md's "HPC Storage Engineering for
-AI Workloads" for full detail, and `READING_LIST.md`'s Phase 21 section
-for citations ahead of any commits.
+AI Workloads" for full detail. **Built 2026-09-16:** steps 1, 2, 6, 7,
+8, 9 and step 11's load-generation half are real and run locally
+(real I/O-pattern characterization of `data_loading`/`checkpoint`; a
+19.63x/11.69x real small-file-vs-sharded-blob speedup, one real bug
+caught — the read-path comparison originally used a metadata-only stat
+instead of a real content read, fixed and re-measured; real N-way
+checkpoint-burst contention modeling, efficiency dropping 0.537→0.052;
+real zlib compression on the actual trained transformer's weights,
+1.065x–8.186x depending on artifact type; a real extension of
+`networking::multitenancy::FairScheduler` for storage QoS; a real DLIO-
+style benchmark interleaving the real DataLoader and transformer, one
+real bug caught — the original assertion wrongly assumed more prefetch
+workers always help, rewritten after measurement showed they barely
+matter here). Steps 3, 4, 5, 10 are literature-grounded as planned.
+Step 11's MinIO deploy/tune scripts are real but toolchain-gated (MinIO
+install declined this session). See `hpc_storage/README.md`/`DESIGN.md`
+for the full per-step writeup.
 
-**Phase 22: HPC Cluster Systems Engineering — SCOPED 2026-09-12, not yet
-started.** Lives in `hpc_cluster/` (planned), cross-referencing rather
+**Phase 22: HPC Cluster Systems Engineering — CODE COMPLETE (11/11
+steps, 2026-09-16).** Lives in `hpc_cluster/`, cross-referencing rather
 than duplicating `networking/ring_allreduce`/`tree_allreduce`/
 `topo_scheduler`, `foundation/numa`/`ws_pool`, and
 `fpga_engine/pcie_latency`. Closes a fourth gap, found by checking the
@@ -994,8 +1029,26 @@ user's explicit direction to treat this exactly like every other
 hardware-gated phase (real CUDA in `gpu_engine`, real HLS in
 `fpga_engine`) rather than provisioning infrastructure first. See
 PLAN.md's Phase 22 section and SCOPE.md's "HPC Cluster Systems
-Engineering" for full detail, and `READING_LIST.md`'s Phase 22 section
-for citations ahead of any commits.
+Engineering" for full detail. **Built 2026-09-16:** MPI ring all-reduce
+(step 1) and the OpenMP port (step 2) are real, correct code, toolchain-
+gated (MPI/`libomp` installs declined this session) — step 2's
+comparison harness against `foundation`'s `WorkStealingPool` was still
+run for real (3.0-3.2x speedup on 4 threads, after catching and fixing
+a debug-build measurement artifact). Slurm configs (step 3) have real,
+justified backfill/fairshare/QoS parameters, empirically confirmed no
+macOS Slurm formula exists rather than assumed; the health-check script
+(step 4) is wired into step 3's `HealthCheckProgram=` and actually runs
+locally (one real self-test bug caught and fixed). The rack power/
+cooling model (step 5) and cluster reliability/MTBF model (step 6) both
+run locally with real findings. Steps 7-8 are written analyses grounded
+in the cited components' real numbers. The Apptainer definition (step
+9) was confirmed installable-but-Linux-gated on this Mac, not assumed
+blocked. Linux/OS AI-workload tuning scripts (step 10) have their
+read-only half (current sysctl/ulimit inspection) run locally. Step 11
+is filed in `READING_LIST.md` as reference material, not code, per plan.
+Full local suite (this phase's own scope): 128/128 passing, zero
+regressions. See `hpc_cluster/README.md`/`DESIGN.md` for the full
+per-step writeup.
 
 ---
 
@@ -1111,6 +1164,22 @@ step 10 (Linux/OS tuning for HPC AI workloads), confirmed as a genuine
 gap distinct from `cpu_engine/os_tuning`'s existing latency-jitter
 focus after checking that step's actual content first rather than
 assuming.
+
+**Update 2026-09-16: Phases 20, 21, and 22 all code-complete, implemented
+in parallel.** Built as three simultaneous git worktrees/subagents (one
+per phase, since each lives in its own directory with no cross-
+dependency), merged back into `main` at this checkpoint after all three
+finished — no new local installs (PennyLane, Strawberry Fields, MPI,
+OpenMP/`libomp`, MinIO were all offered and explicitly declined this
+session; every step needing one of them was written as real, complete,
+toolchain-gated-but-unrun code instead, same convention as CUDA/HLS/MLIR
+elsewhere in this repo). **This closes out every phase currently scoped
+in PLAN.md — nothing left project-wide except hardware/toolchain
+validation** (Phases 3-10, 12's GPU/FPGA/TPU/Linux/eBPF pieces; Phase 15
+step 1; Phase 16 steps 2-5; Phase 20's real QPU access; Phase 21's VAST/
+MinIO access; Phase 22's MPI/OpenMP/Slurm/Apptainer/Linux-sysctl
+installs). See each phase's own status paragraph above for what was
+actually built and measured.
 
 **Hardware validation pass (after all phases above are code-complete):**
 Work through phases in the same order, one hardware type at a time.
