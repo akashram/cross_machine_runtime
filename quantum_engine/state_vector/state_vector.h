@@ -44,6 +44,18 @@ class StateVector {
     return s;
   }
 
+  // Divides every amplitude by sqrt(norm_squared()). Needed after
+  // applying a sub-unitary (non-norm-preserving) operator, e.g. one Kraus
+  // operator of a noise channel's Monte Carlo wavefunction unraveling
+  // (see noise_model.h) -- a genuine physical renormalization step, not a
+  // numerical-stability nicety.
+  void renormalize() {
+    double n2 = norm_squared();
+    if (n2 <= 0.0) throw std::runtime_error("StateVector::renormalize: zero-norm state");
+    double inv = 1.0 / std::sqrt(n2);
+    for (auto &a : amps_) a *= inv;
+  }
+
   // Applies a general single-qubit unitary [[m00,m01],[m10,m11]] to `qubit`.
   // Iterates only over the half of the amplitude vector with bit `qubit`
   // clear, updating each (i, i|bit) pair together -- O(2^n) per gate, no
